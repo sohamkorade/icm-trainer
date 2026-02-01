@@ -17,12 +17,9 @@ export function handleUtteranceEnd(
   callAndResponseActiveRef,
   sequenceNotes,
   targetIndexRef,
-  resetAttempts,
   setTargetIndex,
   initializeMetronome,
   scheduleNextTargetNote,
-  attemptsLeftRef,
-  setAttemptsLeft,
   setCurrentUtterance,
   wasSilentRef,
 ) {
@@ -39,19 +36,12 @@ export function handleUtteranceEnd(
 
   if (allChecksPassed && callAndResponseActiveRef.current) {
     const nextIndex = (targetIndexRef.current + 1) % sequenceNotes.length;
-    resetAttempts();
     setTargetIndex(nextIndex);
     initializeMetronome();
     scheduleNextTargetNote(sequenceNotes[nextIndex]);
   } else if (callAndResponseActiveRef.current) {
-    const newAttemptsLeft = Math.max(0, attemptsLeftRef.current - 1);
-    attemptsLeftRef.current = newAttemptsLeft;
-    setAttemptsLeft(newAttemptsLeft);
-    if (newAttemptsLeft == 0) {
-      resetAttempts();
-      initializeMetronome();
-      scheduleNextTargetNote(sequenceNotes[targetIndexRef.current]);
-    }
+    initializeMetronome();
+    scheduleNextTargetNote(sequenceNotes[targetIndexRef.current]);
   }
 
   currentUtteranceRef.current = null;

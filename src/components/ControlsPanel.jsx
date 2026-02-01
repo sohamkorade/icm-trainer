@@ -7,13 +7,11 @@ function ControlsPanel({
   tonic,
   tonicOptions,
   tempo,
-  attemptsBeforeRepeat,
   onStart,
   onStop,
   onToggleDrone,
   onTonicChange,
   onTempoChange,
-  onAttemptsBeforeRepeatChange,
   onListen,
 }) {
   return (
@@ -32,7 +30,7 @@ function ControlsPanel({
         >
           {isDroneOn ? "Stop Drone" : "Start Drone"}
         </button>
-        <label className="inline-select">
+        {/* <label className="inline-select">
           <span>Tonic</span>
           <select value={tonic} onChange={onTonicChange}>
             {tonicOptions.map((option) => (
@@ -41,7 +39,7 @@ function ControlsPanel({
               </option>
             ))}
           </select>
-        </label>
+        </label> */}
         {/* <label className="inline-input">
           <span>Tempo (BPM)</span>
           <input
@@ -53,17 +51,6 @@ function ControlsPanel({
             disabled={!audioReady}
           />
         </label> */}
-        <label className="inline-input">
-          <span>Attempts Before Repeat</span>
-          <input
-            type="number"
-            min="1"
-            max="10"
-            value={attemptsBeforeRepeat}
-            onChange={onAttemptsBeforeRepeatChange}
-            disabled={!audioReady}
-          />
-        </label>
         <button onClick={onListen} disabled={!audioReady}>
           Listen
         </button>
@@ -85,12 +72,10 @@ ControlsPanel.propTypes = {
     }),
   ).isRequired,
   tempo: PropTypes.number.isRequired,
-  attemptsBeforeRepeat: PropTypes.number.isRequired,
   onStart: PropTypes.func.isRequired,
   onStop: PropTypes.func.isRequired,
   onListen: PropTypes.func.isRequired,
   onToggleDrone: PropTypes.func.isRequired,
   onTonicChange: PropTypes.func.isRequired,
   onTempoChange: PropTypes.func.isRequired,
-  onAttemptsBeforeRepeatChange: PropTypes.func.isRequired,
 };

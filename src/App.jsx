@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   MAX_HISTORY,
   MODE_SEQUENCES,
-  ATTEMPT_COUNT,
   SAMPLE_FOLDER,
   TONIC_OPTIONS,
   DEFAULT_TEMPO_BPM,
@@ -55,10 +54,7 @@ function App() {
   const [status, setStatus] = useState("Click Start to initialize audio.");
   const [sampleBuffers, setSampleBuffers] = useState({});
   const [isCallAndResponseActive, setIsCallAndResponseActive] = useState(false);
-  const [attemptsLeft, setAttemptsLeft] = useState(ATTEMPT_COUNT);
   const [tempo, setTempo] = useState(DEFAULT_TEMPO_BPM);
-  const [attemptsBeforeRepeat, setAttemptsBeforeRepeat] =
-    useState(ATTEMPT_COUNT);
   const [currentUtterance, setCurrentUtterance] = useState(null);
 
   const audioCtxRef = useRef(null);
@@ -71,7 +67,6 @@ function App() {
   const trainerSourceRef = useRef(null);
   const rafRef = useRef(null);
   const callAndResponseActiveRef = useRef(false);
-  const attemptsLeftRef = useRef(ATTEMPT_COUNT);
   const notePlayCountsRef = useRef({});
   const pitchHistoryRef = useRef([]);
   const pitchHistoryTimestampsRef = useRef([]);
@@ -85,7 +80,6 @@ function App() {
   const modeRef = useRef(mode);
   const tonicRef = useRef(tonic);
   const tempoRef = useRef(tempo);
-  const attemptsBeforeRepeatRef = useRef(attemptsBeforeRepeat);
 
   // Utterance tracking
   const currentUtteranceRef = useRef(null);
@@ -137,10 +131,6 @@ function App() {
   useEffect(() => {
     tempoRef.current = tempo;
   }, [tempo]);
-
-  useEffect(() => {
-    attemptsBeforeRepeatRef.current = attemptsBeforeRepeat;
-  }, [attemptsBeforeRepeat]);
 
   const ensureAudioContext = async () => {
     if (audioCtxRef.current) {
@@ -332,12 +322,6 @@ function App() {
     // Don't clear suggestions - let them scroll off naturally
   };
 
-  const resetAttempts = () => {
-    const attempts = attemptsBeforeRepeatRef.current;
-    attemptsLeftRef.current = attempts;
-    setAttemptsLeft(attempts);
-  };
-
   const initializeMetronome = () => {
     metronomeRef.current = createMetronome(tempoRef.current);
     // Expected start times will be calculated when target note is played
@@ -363,7 +347,6 @@ function App() {
     }
     callAndResponseActiveRef.current = true;
     setIsCallAndResponseActive(true);
-    resetAttempts();
     resetUtterance();
     initializeMetronome();
     playTargetNote();
@@ -487,12 +470,9 @@ function App() {
             callAndResponseActiveRef,
             sequenceNotes,
             targetIndexRef,
-            resetAttempts,
             setTargetIndex,
             initializeMetronome,
             scheduleNextTargetNote,
-            attemptsLeftRef,
-            setAttemptsLeft,
             setCurrentUtterance,
             wasSilentRef,
           );
@@ -729,7 +709,6 @@ function App() {
 
   useEffect(() => {
     setTargetIndex(0);
-    resetAttempts();
   }, [mode]);
 
   return (
@@ -744,15 +723,11 @@ function App() {
         tonic={tonic}
         tonicOptions={TONIC_OPTIONS}
         tempo={tempo}
-        attemptsBeforeRepeat={attemptsBeforeRepeat}
         onStart={handleStart}
         onStop={handleStop}
         onToggleDrone={toggleDrone}
         onTonicChange={(event) => setTonic(Number(event.target.value))}
         onTempoChange={(event) => setTempo(Number(event.target.value))}
-        onAttemptsBeforeRepeatChange={(event) =>
-          setAttemptsBeforeRepeat(Number(event.target.value))
-        }
         onListen={startCallAndResponse}
       />
 
@@ -763,7 +738,6 @@ function App() {
         confidence={confidence}
         inTune={inTune}
         suggestion={suggestion}
-        attemptsLeft={attemptsLeft}
         canvasRef={canvasRef}
         status={status}
         targetLabel={targetLabel}
