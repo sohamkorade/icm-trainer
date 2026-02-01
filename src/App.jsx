@@ -717,7 +717,6 @@ function App() {
       toY,
       suggestionsRef.current,
       timestamps,
-      tonicValue,
       minFreq,
       maxFreq,
     );

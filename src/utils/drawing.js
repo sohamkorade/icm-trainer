@@ -2,8 +2,7 @@
  * Drawing utilities for the pitch graph canvas
  */
 
-import { BASE_NOTES, MODE_SEQUENCES, GRAPH_TIME_RANGE_MS } from "../constants";
-import { getNoteByLabel } from "./notes";
+import { BASE_NOTES, GRAPH_TIME_RANGE_MS } from "../constants";
 
 export function getCanvasMetrics(canvas) {
   if (!canvas) {
@@ -183,6 +182,10 @@ export function drawSuggestions(
     const textWidth = textMetrics.width;
     const textHeight = 16;
     const padding = 6;
+
+    // offset
+    x -= textWidth / 2;
+    y += textHeight * 2;
 
     // Draw background rectangle
     ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
