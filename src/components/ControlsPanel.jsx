@@ -6,11 +6,13 @@ function ControlsPanel({
   isDroneOn,
   tonic,
   tonicOptions,
+  tempo,
   onStart,
   onStop,
   onPlayTargetNote,
   onToggleDrone,
   onTonicChange,
+  onTempoChange,
 }) {
   return (
     <section className="panel">
@@ -45,6 +47,17 @@ function ControlsPanel({
             ))}
           </select>
         </label>
+        <label className="inline-input">
+          <span>Tempo (BPM)</span>
+          <input
+            type="number"
+            min="30"
+            max="200"
+            value={tempo}
+            onChange={onTempoChange}
+            disabled={!audioReady}
+          />
+        </label>
       </div>
     </section>
   );
@@ -62,9 +75,11 @@ ControlsPanel.propTypes = {
       freq: PropTypes.number.isRequired,
     }),
   ).isRequired,
+  tempo: PropTypes.number.isRequired,
   onStart: PropTypes.func.isRequired,
   onStop: PropTypes.func.isRequired,
   onPlayTargetNote: PropTypes.func.isRequired,
   onToggleDrone: PropTypes.func.isRequired,
   onTonicChange: PropTypes.func.isRequired,
+  onTempoChange: PropTypes.func.isRequired,
 };

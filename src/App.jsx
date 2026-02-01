@@ -9,9 +9,28 @@ import {
   ATTEMPT_COUNT,
   SAMPLE_FOLDER,
   TONIC_OPTIONS,
+  DEFAULT_TEMPO_BPM,
+  UTTERANCE_SILENCE_THRESHOLD,
+  TARGET_NOTE_GAP_MS,
 } from "./constants";
 import { computeRms, yinPitch } from "./pitch/yin";
 import { getMatchResult, getNoteByLabel, toNoteValue } from "./utils/notes";
+import {
+  createUtterance,
+  addPitchSample,
+  detectUtteranceEnd,
+  checkStability,
+  checkExpectedNote,
+  checkExpectedLength,
+  checkExpectedTiming,
+  generateSuggestions,
+  finalizeUtterance,
+} from "./utils/utterance";
+import {
+  createMetronome,
+  getExpectedStartTime,
+  resetMetronome,
+} from "./utils/metronome";
 import ControlsPanel from "./components/ControlsPanel";
 import PitchPanel from "./components/PitchPanel";
 
@@ -34,6 +53,8 @@ function App() {
   const [sampleBuffers, setSampleBuffers] = useState({});
   const [isCallAndResponseActive, setIsCallAndResponseActive] = useState(false);
   const [attemptsLeft, setAttemptsLeft] = useState(ATTEMPT_COUNT);
+  const [tempo, setTempo] = useState(DEFAULT_TEMPO_BPM);
+  const [currentUtterance, setCurrentUtterance] = useState(null);
 
   const audioCtxRef = useRef(null);
   const analyserRef = useRef(null);
@@ -44,11 +65,9 @@ function App() {
   const rafRef = useRef(null);
   const callAndResponseActiveRef = useRef(false);
   const attemptsLeftRef = useRef(ATTEMPT_COUNT);
-  const stableDetectedSinceRef = useRef(null);
-  const stableDetectedLabelRef = useRef(null);
-  const stableAttemptCountedRef = useRef(false);
   const notePlayCountsRef = useRef({});
   const pitchHistoryRef = useRef([]);
+  const pitchHistoryTimestampsRef = useRef([]);
   const canvasRef = useRef(null);
   const lastUiUpdateRef = useRef(0);
   const pitchErrorRef = useRef(false);
@@ -56,21 +75,34 @@ function App() {
   const targetIndexRef = useRef(targetIndex);
   const modeRef = useRef(mode);
   const tonicRef = useRef(tonic);
+  const tempoRef = useRef(tempo);
+
+  // Utterance tracking
+  const currentUtteranceRef = useRef(null);
+  const utterancesRef = useRef([]);
+  const metronomeRef = useRef(null);
+  const expectedStartTimesRef = useRef([]);
+  const wasSilentRef = useRef(true);
+  const targetNotePlayTimeRef = useRef(null);
+  const targetNoteDurationRef = useRef(1200); // Default 1.2 seconds for oscillator
 
   const sequence = useMemo(() => MODE_SEQUENCES[mode], [mode]);
-  const targetLabel = sequence[targetIndex];
+  const sequenceNotes = useMemo(() => sequence.notes || [], [sequence]);
+  const sequenceDurations = useMemo(() => sequence.durations || [], [sequence]);
+  const targetLabel = sequenceNotes[targetIndex];
   const sequenceOptions = useMemo(
     () =>
-      Object.entries(MODE_SEQUENCES).map(([key, notes]) => ({
+      Object.entries(MODE_SEQUENCES).map(([key, seq]) => ({
         key,
-        label: notes.join(" "),
+        label: (seq.notes || seq).join(" "),
       })),
     [],
   );
   const sampleLabels = useMemo(() => {
     const labels = new Set(BASE_NOTES.map((note) => note.label));
     Object.values(MODE_SEQUENCES).forEach((modeSequence) => {
-      modeSequence.forEach((label) => labels.add(label));
+      const notes = modeSequence.notes || modeSequence;
+      notes.forEach((label) => labels.add(label));
     });
     return Array.from(labels);
   }, []);
@@ -90,6 +122,10 @@ function App() {
   useEffect(() => {
     callAndResponseActiveRef.current = isCallAndResponseActive;
   }, [isCallAndResponseActive]);
+
+  useEffect(() => {
+    tempoRef.current = tempo;
+  }, [tempo]);
 
   const ensureAudioContext = async () => {
     if (audioCtxRef.current) {
@@ -169,6 +205,7 @@ function App() {
     setIsDroneOn(false);
     setIsCallAndResponseActive(false);
     callAndResponseActiveRef.current = false;
+    resetUtterance();
     if (droneOscRef.current) {
       droneOscRef.current.stop();
       droneOscRef.current.disconnect();
@@ -216,12 +253,13 @@ function App() {
   const playSample = (buffer) => {
     const audioCtx = audioCtxRef.current;
     if (!audioCtx || !buffer) {
-      return;
+      return null;
     }
     const source = audioCtx.createBufferSource();
     source.buffer = buffer;
     source.connect(audioCtx.destination);
     source.start();
+    return buffer.duration * 1000; // Return duration in milliseconds
   };
 
   const playTargetNote = (label = targetLabel) => {
@@ -231,26 +269,60 @@ function App() {
     }
     const targetFreq = tonic * Math.pow(2, note.semitone / 12);
     const buffer = sampleBuffers[label];
+    const now = Date.now();
+    targetNotePlayTimeRef.current = now;
+
     notePlayCountsRef.current = {
       ...notePlayCountsRef.current,
       [label]: (notePlayCountsRef.current[label] || 0) + 1,
     };
+
     if (buffer) {
-      playSample(buffer);
-      return;
+      const duration = playSample(buffer);
+      targetNoteDurationRef.current = duration || 1200; // Fallback to 1.2s if duration unavailable
+    } else {
+      playOscillator(targetFreq, 1.2);
+      targetNoteDurationRef.current = 1200; // 1.2 seconds for oscillator
     }
-    playOscillator(targetFreq, 1.2);
   };
 
-  const resetStableDetection = () => {
-    stableDetectedSinceRef.current = null;
-    stableDetectedLabelRef.current = null;
-    stableAttemptCountedRef.current = false;
+  const resetUtterance = () => {
+    if (currentUtteranceRef.current) {
+      finalizeUtterance(currentUtteranceRef.current);
+      utterancesRef.current.push(currentUtteranceRef.current);
+    }
+    currentUtteranceRef.current = null;
+    setCurrentUtterance(null);
+    wasSilentRef.current = true;
+    targetNotePlayTimeRef.current = null;
   };
 
   const resetAttempts = () => {
     attemptsLeftRef.current = ATTEMPT_COUNT;
     setAttemptsLeft(ATTEMPT_COUNT);
+  };
+
+  const initializeMetronome = () => {
+    const currentSequence = MODE_SEQUENCES[modeRef.current];
+    const durations =
+      currentSequence.durations || currentSequence.notes.map(() => 1000);
+    metronomeRef.current = createMetronome(tempoRef.current);
+
+    // Expected start times will be calculated when target note is played
+    // based on: target note play time + duration + gap
+    expectedStartTimesRef.current = [];
+  };
+
+  const getExpectedStartTimeForCurrentNote = () => {
+    if (targetNotePlayTimeRef.current === null) {
+      return Date.now();
+    }
+    // Expected start = when target note was played + note duration + gap
+    return (
+      targetNotePlayTimeRef.current +
+      targetNoteDurationRef.current +
+      TARGET_NOTE_GAP_MS
+    );
   };
 
   const startCallAndResponse = () => {
@@ -260,7 +332,8 @@ function App() {
     callAndResponseActiveRef.current = true;
     setIsCallAndResponseActive(true);
     resetAttempts();
-    resetStableDetection();
+    resetUtterance();
+    initializeMetronome();
     playTargetNote();
   };
 
@@ -297,12 +370,17 @@ function App() {
 
   const updatePitchUi = (pitch, pitchConfidence, hasSignal) => {
     const history = pitchHistoryRef.current;
+    const timestamps = pitchHistoryTimestampsRef.current;
+    const now = Date.now();
+
     history.push(hasSignal ? Math.max(pitch, 0) : null);
+    timestamps.push(now);
+
     if (history.length > MAX_HISTORY) {
       history.shift();
+      timestamps.shift();
     }
 
-    const now = Date.now();
     if (now - lastUiUpdateRef.current > 80) {
       lastUiUpdateRef.current = now;
       setDetectedPitch(pitch);
@@ -310,71 +388,149 @@ function App() {
     }
   };
 
-  const updateMatchState = (pitch, pitchConfidence) => {
+  const updateUtteranceState = (pitch, pitchConfidence, rms) => {
     const tonicValue = tonicRef.current;
     const currentSequence = MODE_SEQUENCES[modeRef.current];
-    const currentTarget = currentSequence[targetIndexRef.current];
-    const match = getMatchResult({
-      pitch,
-      pitchConfidence,
-      tonicValue,
-      targetLabel: currentTarget,
-    });
-    if (!match) {
-      resetStableDetection();
+    const sequenceNotes = currentSequence.notes || currentSequence;
+    const sequenceDurations =
+      currentSequence.durations || sequenceNotes.map(() => 1000);
+    const currentTarget = sequenceNotes[targetIndexRef.current];
+    const now = Date.now();
+
+    const hasSignal =
+      rms >= UTTERANCE_SILENCE_THRESHOLD && pitch > 0 && pitchConfidence >= 0.3;
+    const isSilent = !hasSignal;
+
+    // Detect utterance end
+    if (currentUtteranceRef.current && isSilent) {
+      const ended = detectUtteranceEnd(
+        currentUtteranceRef.current.pitchSamples,
+        rms,
+        UTTERANCE_SILENCE_THRESHOLD,
+      );
+      if (ended) {
+        finalizeUtterance(currentUtteranceRef.current);
+        utterancesRef.current.push(currentUtteranceRef.current);
+
+        // Check if utterance was successful and move to next note
+        const utterance = currentUtteranceRef.current;
+        const allChecksPassed =
+          utterance.checks.isStable === true &&
+          utterance.checks.isExpectedNote === true &&
+          utterance.checks.isExpectedLength === true &&
+          utterance.checks.isAtExpectedTime === true;
+
+        if (allChecksPassed && callAndResponseActiveRef.current) {
+          const nextIndex = (targetIndexRef.current + 1) % sequenceNotes.length;
+          resetAttempts();
+          setTargetIndex(nextIndex);
+          initializeMetronome(); // Reset metronome for next sequence
+          playTargetNote(sequenceNotes[nextIndex]);
+        } else if (callAndResponseActiveRef.current) {
+          const newAttemptsLeft = Math.max(0, attemptsLeftRef.current - 1);
+          attemptsLeftRef.current = newAttemptsLeft;
+          setAttemptsLeft(newAttemptsLeft);
+          if (newAttemptsLeft > 0) {
+            playTargetNote(sequenceNotes[targetIndexRef.current]);
+          } else {
+            resetAttempts();
+            initializeMetronome();
+            playTargetNote(sequenceNotes[targetIndexRef.current]);
+          }
+        }
+
+        currentUtteranceRef.current = null;
+        setCurrentUtterance(null);
+        wasSilentRef.current = true;
+      }
+    }
+
+    // Detect utterance start (transition from silence to pitch)
+    if (!currentUtteranceRef.current && hasSignal && wasSilentRef.current) {
+      // Calculate expected start time based on when target note was played + duration + gap
+      const expectedStartTime = getExpectedStartTimeForCurrentNote();
+      const expectedDuration =
+        sequenceDurations[targetIndexRef.current] || 1000;
+      currentUtteranceRef.current = createUtterance(
+        currentTarget,
+        expectedStartTime,
+        expectedDuration,
+      );
+      setCurrentUtterance({ ...currentUtteranceRef.current });
+      wasSilentRef.current = false;
+    }
+
+    // Update current utterance with pitch sample
+    if (currentUtteranceRef.current && hasSignal) {
+      addPitchSample(currentUtteranceRef.current, pitch, pitchConfidence, now);
+
+      // Run checks in real-time
+      const stabilityCheck = checkStability(
+        currentUtteranceRef.current,
+        tonicValue,
+      );
+      const noteCheck = checkExpectedNote(
+        currentUtteranceRef.current,
+        tonicValue,
+        currentTarget,
+      );
+      const lengthCheck = checkExpectedLength(currentUtteranceRef.current);
+      const timingCheck = checkExpectedTiming(currentUtteranceRef.current);
+
+      // Update checks
+      currentUtteranceRef.current.checks.isStable = stabilityCheck.isStable;
+      currentUtteranceRef.current.checks.isExpectedNote =
+        noteCheck.isExpectedNote;
+      currentUtteranceRef.current.checks.isExpectedLength =
+        lengthCheck.isExpectedLength;
+      currentUtteranceRef.current.checks.isAtExpectedTime =
+        timingCheck.isAtExpectedTime;
+
+      // Generate suggestions
+      currentUtteranceRef.current.suggestions = generateSuggestions(
+        currentUtteranceRef.current,
+        {
+          stability: stabilityCheck,
+          expectedNote: noteCheck,
+          expectedLength: lengthCheck,
+          expectedTiming: timingCheck,
+        },
+      );
+
+      // Update state periodically (throttled to avoid too many re-renders)
+      if (now - lastUiUpdateRef.current > 200) {
+        setCurrentUtterance({ ...currentUtteranceRef.current });
+      }
+
+      // Update UI state for display
+      const match = getMatchResult({
+        pitch,
+        pitchConfidence,
+        tonicValue,
+        targetLabel: currentTarget,
+      });
+
+      if (match) {
+        setDetectedNote(match.closest.displayLabel || match.closest.note.label);
+        setCentsOff(match.closest.cents);
+        setInTune(match.isGood);
+      } else {
+        setDetectedNote("");
+        setCentsOff(0);
+        setInTune(false);
+      }
+    } else if (isSilent) {
+      wasSilentRef.current = true;
       setDetectedNote("");
       setCentsOff(0);
       setInTune(false);
-      return null;
     }
 
-    setDetectedNote(match.closest.displayLabel || match.closest.note.label);
-    setCentsOff(match.closest.cents);
-    setInTune(match.isGood);
-    const now = Date.now();
-    const closestLabel = match.closest.note.label;
-    if (closestLabel !== stableDetectedLabelRef.current) {
-      stableDetectedLabelRef.current = closestLabel;
-      stableDetectedSinceRef.current = now;
-      stableAttemptCountedRef.current = false;
-      return match;
-    }
-    if (
-      stableDetectedSinceRef.current &&
-      now - stableDetectedSinceRef.current >= STABLE_MS &&
-      !stableAttemptCountedRef.current
-    ) {
-      stableAttemptCountedRef.current = true;
-      if (match.isGood) {
-        const nextIndex = (targetIndexRef.current + 1) % currentSequence.length;
-        resetStableDetection();
-        resetAttempts();
-        setTargetIndex(nextIndex);
-        if (callAndResponseActiveRef.current) {
-          playTargetNote(currentSequence[nextIndex]);
-        }
-        return match;
-      }
-      if (!callAndResponseActiveRef.current) {
-        return match;
-      }
-      const newAttemptsLeft = Math.max(0, attemptsLeftRef.current - 1);
-      attemptsLeftRef.current = newAttemptsLeft;
-      setAttemptsLeft(newAttemptsLeft);
-      if (newAttemptsLeft > 0) {
-        resetStableDetection();
-        playTargetNote(currentSequence[targetIndexRef.current]);
-        return match;
-      }
-      resetStableDetection();
-      resetAttempts();
-      playTargetNote(currentSequence[targetIndexRef.current]);
-    }
-    return match;
+    return currentUtteranceRef.current;
   };
 
-  const updateSuggestion = ({ pitch, pitchConfidence, rms, match }) => {
-    if (rms < 0.01) {
+  const updateSuggestion = (utterance, rms, pitch, pitchConfidence) => {
+    if (rms < UTTERANCE_SILENCE_THRESHOLD) {
       setSuggestion("Sing louder for a clear pitch.");
       return;
     }
@@ -382,27 +538,28 @@ function App() {
       setSuggestion("Sing louder for a clearer pitch.");
       return;
     }
-    if (match?.isGood) {
-      setSuggestion("In tune. Hold it steady.");
+
+    // Use utterance-based suggestions if available
+    if (utterance && utterance.suggestions.length > 0) {
+      setSuggestion(utterance.suggestions.join(" "));
       return;
     }
-    if (match?.closest) {
-      const tonicValue = tonicRef.current;
-      const target = getNoteByLabel(targetLabel);
-      if (!target || !tonicValue) {
-        setSuggestion("Sing louder for a clearer pitch.");
+
+    // Fallback to basic suggestion
+    if (utterance) {
+      const allChecksPassed =
+        utterance.checks.isStable === true &&
+        utterance.checks.isExpectedNote === true &&
+        utterance.checks.isExpectedLength === true &&
+        utterance.checks.isAtExpectedTime === true;
+
+      if (allChecksPassed) {
+        setSuggestion("Perfect! All checks passed.");
         return;
       }
-      const noteValue = toNoteValue(tonicValue, pitch);
-      const nearestTarget =
-        target.semitone + 12 * Math.round((noteValue - target.semitone) / 12);
-      const delta = nearestTarget - noteValue;
-      const notesOff = Math.max(0.1, Math.round(Math.abs(delta) * 10) / 10);
-      const direction = delta > 0 ? "up" : "down";
-      setSuggestion(`Go ${direction} by ${notesOff} notes.`);
-      return;
     }
-    setSuggestion("Sing louder for a clearer pitch.");
+
+    setSuggestion("Start listening to get feedback.");
   };
 
   useEffect(() => {
@@ -436,15 +593,15 @@ function App() {
       }
 
       const rms = computeRms(buffer);
-      if (rms < 0.01) {
+      if (rms < UTTERANCE_SILENCE_THRESHOLD) {
         pitch = 0;
         pitchConfidence = 0;
       }
 
-      const hasSignal = rms >= 0.01;
+      const hasSignal = rms >= UTTERANCE_SILENCE_THRESHOLD;
       updatePitchUi(pitch, pitchConfidence, hasSignal);
-      const match = updateMatchState(pitch, pitchConfidence);
-      updateSuggestion({ pitch, pitchConfidence, rms, match });
+      const utterance = updateUtteranceState(pitch, pitchConfidence, rms);
+      updateSuggestion(utterance, rms, pitch, pitchConfidence);
 
       drawPitchGraph();
       rafRef.current = requestAnimationFrame(loop);
@@ -528,7 +685,8 @@ function App() {
 
   const drawTargetLine = (ctx, width, toY, tonicValue, minFreq, maxFreq) => {
     const currentSequence = MODE_SEQUENCES[modeRef.current];
-    const currentTargetLabel = currentSequence[targetIndexRef.current];
+    const sequenceNotes = currentSequence.notes || currentSequence;
+    const currentTargetLabel = sequenceNotes[targetIndexRef.current];
     const targetNote = getNoteByLabel(currentTargetLabel);
     if (!targetNote) {
       return;
@@ -571,6 +729,213 @@ function App() {
     ctx.stroke();
   };
 
+  const drawExpectedTiming = (
+    ctx,
+    width,
+    height,
+    toY,
+    utterance,
+    timestamps,
+    tonicValue,
+    minFreq,
+    maxFreq,
+  ) => {
+    if (!utterance || timestamps.length === 0) {
+      return;
+    }
+
+    const now = Date.now();
+    const oldestTimestamp = timestamps[0];
+    const timeRange = Math.max(now - oldestTimestamp, 1000); // Minimum 1 second range
+
+    // Check if utterance has scrolled off the left side - if so, don't draw it
+    // We check if the expected end time is before the oldest timestamp
+    const expectedEndTime =
+      utterance.expectedStartTime + utterance.expectedDuration;
+    if (expectedEndTime < oldestTimestamp) {
+      return; // Utterance has scrolled off, don't draw
+    }
+
+    // Get target note frequency
+    const targetNote = getNoteByLabel(utterance.expectedNote);
+    if (!targetNote) {
+      return;
+    }
+    const targetFreq = tonicValue * Math.pow(2, targetNote.semitone / 12);
+    if (targetFreq < minFreq || targetFreq > maxFreq) {
+      return;
+    }
+    const targetY = toY(targetFreq);
+
+    // Draw expected start time (vertical line) - green dashed line
+    // Only draw if it's still visible (not scrolled off the left)
+    const expectedStartRelativeTime =
+      utterance.expectedStartTime - oldestTimestamp;
+    if (
+      expectedStartRelativeTime >= -timeRange * 0.1 &&
+      expectedStartRelativeTime <= timeRange * 1.1
+    ) {
+      const x = Math.max(
+        0,
+        Math.min(width, (expectedStartRelativeTime / timeRange) * width),
+      );
+      ctx.strokeStyle = "#90EE90";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Label at top (only if not too close to left edge)
+      if (x > 80) {
+        ctx.fillStyle = "#90EE90";
+        ctx.font = "11px sans-serif";
+        ctx.textAlign = "left";
+        const labelX = Math.max(2, Math.min(x + 2, width - 80));
+        ctx.fillText("Expected Start", labelX, 14);
+      }
+    }
+
+    // Draw expected duration bar (horizontal bar showing expected time range)
+    // Only draw if any part of it is still visible
+    const expectedStartX = Math.max(
+      0,
+      Math.min(
+        width,
+        ((utterance.expectedStartTime - oldestTimestamp) / timeRange) * width,
+      ),
+    );
+    const expectedDurationWidth =
+      (utterance.expectedDuration / timeRange) * width;
+    const expectedEndX = Math.min(
+      width,
+      expectedStartX + expectedDurationWidth,
+    );
+
+    // Only draw if the expected duration bar is at least partially visible
+    if (expectedEndX > 0 && expectedStartX < width) {
+      // Draw expected duration outline (green dashed rectangle)
+      ctx.strokeStyle = "#90EE90";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(expectedStartX, targetY - 8, expectedDurationWidth, 16);
+      ctx.setLineDash([]);
+
+      // Fill with semi-transparent green
+      ctx.fillStyle = "rgba(144, 238, 144, 0.15)";
+      ctx.fillRect(expectedStartX, targetY - 8, expectedDurationWidth, 16);
+
+      // Label for expected duration (only if visible)
+      if (expectedStartX > 100) {
+        ctx.fillStyle = "#90EE90";
+        ctx.font = "10px sans-serif";
+        ctx.textAlign = "left";
+        const durationLabelX = Math.max(
+          2,
+          Math.min(expectedStartX + 2, width - 100),
+        );
+        ctx.fillText(
+          `Expected: ${utterance.expectedDuration}ms`,
+          durationLabelX,
+          targetY - 12,
+        );
+      }
+    }
+
+    // Draw actual utterance duration (if it exists and is visible)
+    const currentTime = utterance.endTime || now;
+    const actualStartRelativeTime = utterance.startTime - oldestTimestamp;
+    const actualEndRelativeTime = currentTime - oldestTimestamp;
+
+    // Only draw if actual utterance is at least partially visible
+    if (
+      actualEndRelativeTime > 0 &&
+      actualStartRelativeTime < timeRange * 1.1
+    ) {
+      const actualStartX = Math.max(
+        0,
+        Math.min(width, (actualStartRelativeTime / timeRange) * width),
+      );
+      const actualEndX = Math.max(
+        0,
+        Math.min(width, (actualEndRelativeTime / timeRange) * width),
+      );
+      const actualWidth = Math.max(2, actualEndX - actualStartX);
+
+      // Only draw if width is positive and visible
+      if (actualWidth > 0 && actualEndX > 0 && actualStartX < width) {
+        // Calculate pitch extents from utterance pitch samples
+        let minPitch = 0;
+        let maxPitch = 0;
+        let minY = targetY;
+        let maxY = targetY;
+
+        if (utterance.pitchSamples && utterance.pitchSamples.length > 0) {
+          // Get valid pitch samples (with pitch > 0)
+          const validSamples = utterance.pitchSamples.filter(
+            (s) => s.pitch > 0,
+          );
+          if (validSamples.length > 0) {
+            // Find min and max pitch
+            const pitches = validSamples.map((s) => s.pitch);
+            minPitch = Math.min(...pitches);
+            maxPitch = Math.max(...pitches);
+
+            // Convert to Y positions, clamping to visible range
+            if (minPitch >= minFreq && minPitch <= maxFreq) {
+              maxY = toY(minPitch); // Lower pitch = higher Y on canvas
+            }
+            if (maxPitch >= minFreq && maxPitch <= maxFreq) {
+              minY = toY(maxPitch); // Higher pitch = lower Y on canvas
+            }
+
+            // Ensure minY < maxY (minY should be above maxY visually)
+            if (minY > maxY) {
+              const temp = minY;
+              minY = maxY;
+              maxY = temp;
+            }
+          } else if (utterance.startingPitch) {
+            // Fallback to starting pitch with small range
+            const pitch = utterance.startingPitch;
+            if (pitch >= minFreq && pitch <= maxFreq) {
+              const centerY = toY(pitch);
+              minY = centerY - 6;
+              maxY = centerY + 6;
+            }
+          }
+        } else if (utterance.startingPitch) {
+          // Fallback to starting pitch with small range
+          const pitch = utterance.startingPitch;
+          if (pitch >= minFreq && pitch <= maxFreq) {
+            const centerY = toY(pitch);
+            minY = centerY - 6;
+            maxY = centerY + 6;
+          }
+        }
+
+        // Ensure minimum height for visibility
+        const boxHeight = Math.max(12, maxY - minY);
+        const centerY = (minY + maxY) / 2;
+        minY = centerY - boxHeight / 2;
+        maxY = centerY + boxHeight / 2;
+
+        // Draw actual duration bar (orange/blue) covering pitch extents
+        ctx.fillStyle = utterance.endTime
+          ? "rgba(255, 179, 71, 0.4)"
+          : "rgba(91, 108, 255, 0.4)";
+        ctx.fillRect(actualStartX, minY, actualWidth, boxHeight);
+
+        // Draw border
+        ctx.strokeStyle = utterance.endTime ? "#ffb347" : "#5b6cff";
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(actualStartX, minY, actualWidth, boxHeight);
+      }
+    }
+  };
+
   const drawPitchGraph = () => {
     const metrics = getCanvasMetrics();
     if (!metrics) {
@@ -580,16 +945,62 @@ function App() {
     ctx.clearRect(0, 0, width, height);
 
     const history = pitchHistoryRef.current;
+    const timestamps = pitchHistoryTimestampsRef.current;
     const tonicValue = tonicRef.current;
     const { minFreq, maxFreq, minLog, logRange } = getPitchRange(tonicValue);
     const toY = makeYMapper(height, minLog, logRange);
     const currentSequence = MODE_SEQUENCES[modeRef.current];
+    const sequenceNotes = currentSequence.notes || currentSequence;
     const activeLabels = new Set(
-      currentSequence.map((label) => label.replace(/[.']+$/, "")),
+      sequenceNotes.map((label) => label.replace(/[.']+$/, "")),
     );
 
     drawGridLines(ctx, width, toY, tonicValue, minFreq, maxFreq, activeLabels);
     drawTargetLine(ctx, width, toY, tonicValue, minFreq, maxFreq);
+
+    // Draw expected timing indicators for all utterances that are still visible
+    // (including completed ones that haven't scrolled off the left side)
+    if (timestamps.length > 0) {
+      const oldestTimestamp = timestamps[0];
+
+      // Clean up utterances that have scrolled off the left side
+      utterancesRef.current = utterancesRef.current.filter((utterance) => {
+        const expectedEndTime =
+          utterance.expectedStartTime + utterance.expectedDuration;
+        return expectedEndTime >= oldestTimestamp; // Keep if still visible
+      });
+
+      // Draw all completed utterances
+      utterancesRef.current.forEach((utterance) => {
+        drawExpectedTiming(
+          ctx,
+          width,
+          height,
+          toY,
+          utterance,
+          timestamps,
+          tonicValue,
+          minFreq,
+          maxFreq,
+        );
+      });
+
+      // Draw current utterance if it exists
+      if (currentUtteranceRef.current) {
+        drawExpectedTiming(
+          ctx,
+          width,
+          height,
+          toY,
+          currentUtteranceRef.current,
+          timestamps,
+          tonicValue,
+          minFreq,
+          maxFreq,
+        );
+      }
+    }
+
     drawPitchHistory(ctx, width, toY, history);
   };
 
@@ -609,11 +1020,13 @@ function App() {
         isDroneOn={isDroneOn}
         tonic={tonic}
         tonicOptions={TONIC_OPTIONS}
+        tempo={tempo}
         onStart={handleStart}
         onStop={handleStop}
         onPlayTargetNote={startCallAndResponse}
         onToggleDrone={toggleDrone}
         onTonicChange={(event) => setTonic(Number(event.target.value))}
+        onTempoChange={(event) => setTempo(Number(event.target.value))}
       />
 
       <PitchPanel
@@ -627,11 +1040,12 @@ function App() {
         canvasRef={canvasRef}
         status={status}
         targetLabel={targetLabel}
-        sequence={sequence}
+        sequence={sequenceNotes}
         targetIndex={targetIndex}
         sequenceOptions={sequenceOptions}
         mode={mode}
         onModeChange={(event) => setMode(event.target.value)}
+        currentUtterance={currentUtterance}
       />
     </div>
   );

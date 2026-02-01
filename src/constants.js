@@ -28,9 +28,18 @@ const NOTE_DEFS = [
 ];
 
 const MODE_SEQUENCES = {
-  sp: ["S", "P"],
-  sps: ["S", "P", "S'"],
-  sargam: ["S", "R2", "G2", "M1", "P", "D2", "N2", "S'"],
+  sp: {
+    notes: ["S", "P"],
+    durations: [1000, 1000],
+  },
+  sps: {
+    notes: ["S", "P", "S'"],
+    durations: [1000, 1000, 1000],
+  },
+  sargam: {
+    notes: ["S", "R2", "G2", "M1", "P", "D2", "N2", "S'"],
+    durations: [1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000],
+  },
 };
 
 const NOTE_NAMES = [
@@ -64,6 +73,15 @@ const MIN_FREQUENCY = 60;
 const MAX_FREQUENCY = 1000;
 const SAMPLE_FOLDER = `${import.meta.env.BASE_URL}assets/vocalist`;
 
+// Utterance detection constants
+const UTTERANCE_SILENCE_THRESHOLD = 0.01; // RMS threshold for silence detection
+const STABILITY_THRESHOLD_SEMITONES = 0.1; // Semitone threshold for stability check
+const DEFAULT_TEMPO_BPM = 60; // Default tempo in beats per minute
+const TIMING_TOLERANCE_MS = 200; // Tolerance for timing check in milliseconds
+const LENGTH_TOLERANCE_MS = 300; // Tolerance for length check in milliseconds
+const UTTERANCE_SILENCE_DURATION_MS = 100; // Duration of silence to detect utterance end
+const TARGET_NOTE_GAP_MS = 500; // Gap after target note finishes before expected start
+
 export {
   BASE_NOTES,
   NOTE_DEFS,
@@ -77,4 +95,11 @@ export {
   MIN_FREQUENCY,
   MAX_FREQUENCY,
   SAMPLE_FOLDER,
+  UTTERANCE_SILENCE_THRESHOLD,
+  STABILITY_THRESHOLD_SEMITONES,
+  DEFAULT_TEMPO_BPM,
+  TIMING_TOLERANCE_MS,
+  LENGTH_TOLERANCE_MS,
+  UTTERANCE_SILENCE_DURATION_MS,
+  TARGET_NOTE_GAP_MS,
 };

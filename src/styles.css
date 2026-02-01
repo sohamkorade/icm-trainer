@@ -163,6 +163,84 @@ input[type="file"] {
   color: #5be37d;
 }
 
+.utterance-checks {
+  margin-top: 16px;
+  padding: 12px;
+  background: #1b2231;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.check-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.check-label {
+  color: #c6ccda;
+  min-width: 120px;
+}
+
+.check-status {
+  font-weight: bold;
+  font-size: 16px;
+  min-width: 24px;
+  text-align: center;
+}
+
+.check-status.pass {
+  color: #5be37d;
+}
+
+.check-status.fail {
+  color: #ff6b6b;
+}
+
+.check-status.pending {
+  color: #c6ccda;
+}
+
+.check-suggestion {
+  color: #f1a23c;
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.suggestions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.suggestion-item {
+  padding: 8px 12px;
+  background: rgba(241, 162, 60, 0.1);
+  border-left: 3px solid #f1a23c;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.inline-input {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.inline-input input {
+  background: #111621;
+  color: #f4f6fb;
+  border: 1px solid #293145;
+  border-radius: 8px;
+  padding: 6px 10px;
+  width: 80px;
+  font-size: 14px;
+}
+
 .graph-wrapper {
   margin-top: 16px;
   background: #0f1320;

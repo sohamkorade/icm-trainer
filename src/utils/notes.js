@@ -95,10 +95,32 @@ function getMatchResult({ pitch, pitchConfidence, tonicValue, targetLabel }) {
   };
 }
 
+function calculatePitchVariation(pitchSamples, startingPitch, tonicValue) {
+  if (!pitchSamples || pitchSamples.length === 0 || !startingPitch) {
+    return 0;
+  }
+  const startingSemitone = toNoteValue(tonicValue, startingPitch);
+  let maxVariation = 0;
+  for (const sample of pitchSamples) {
+    if (sample.pitch > 0) {
+      const sampleSemitone = toNoteValue(tonicValue, sample.pitch);
+      const variation = Math.abs(sampleSemitone - startingSemitone);
+      maxVariation = Math.max(maxVariation, variation);
+    }
+  }
+  return maxVariation;
+}
+
+function isWithinThreshold(value, target, threshold) {
+  return Math.abs(value - target) <= threshold;
+}
+
 export {
   centsOffFrom,
   toNoteValue,
   getNoteByLabel,
   getClosestNote,
   getMatchResult,
+  calculatePitchVariation,
+  isWithinThreshold,
 };
