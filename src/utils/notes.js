@@ -100,15 +100,17 @@ function calculatePitchVariation(pitchSamples, startingPitch, tonicValue) {
     return 0;
   }
   const startingSemitone = toNoteValue(tonicValue, startingPitch);
-  let maxVariation = 0;
+  let totalVariation = 0;
+  let validSampleCount = 0;
   for (const sample of pitchSamples) {
     if (sample.pitch > 0) {
       const sampleSemitone = toNoteValue(tonicValue, sample.pitch);
       const variation = Math.abs(sampleSemitone - startingSemitone);
-      maxVariation = Math.max(maxVariation, variation);
+      totalVariation += variation;
+      validSampleCount++;
     }
   }
-  return maxVariation;
+  return validSampleCount > 0 ? totalVariation / validSampleCount : 0;
 }
 
 function isWithinThreshold(value, target, threshold) {
