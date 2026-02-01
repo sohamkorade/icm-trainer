@@ -60,6 +60,7 @@ export function playSample(
   buffer,
   trainerAnalyserRef,
   trainerSourceRef,
+  playbackRate = 1,
 ) {
   if (!audioCtx || !buffer) {
     return null;
@@ -75,6 +76,7 @@ export function playSample(
   const analyser = createTrainerAnalyser(audioCtx);
 
   source.buffer = buffer;
+  source.playbackRate.value = playbackRate;
   source.connect(analyser);
   analyser.connect(audioCtx.destination);
   trainerAnalyserRef.current = analyser;
@@ -91,5 +93,5 @@ export function playSample(
     trainerSourceRef.current = null;
   };
 
-  return buffer.duration * 1000; // Return duration in milliseconds
+  return (buffer.duration / playbackRate) * 1000; // Return duration in milliseconds (adjusted for playback rate)
 }

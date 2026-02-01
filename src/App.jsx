@@ -59,7 +59,8 @@ function App() {
   const [isCallAndResponseActive, setIsCallAndResponseActive] = useState(false);
   const [attemptsLeft, setAttemptsLeft] = useState(ATTEMPT_COUNT);
   const [tempo, setTempo] = useState(DEFAULT_TEMPO_BPM);
-  const [attemptsBeforeRepeat, setAttemptsBeforeRepeat] = useState(ATTEMPT_COUNT);
+  const [attemptsBeforeRepeat, setAttemptsBeforeRepeat] =
+    useState(ATTEMPT_COUNT);
   const [currentUtterance, setCurrentUtterance] = useState(null);
 
   const audioCtxRef = useRef(null);
@@ -263,12 +264,13 @@ function App() {
     );
   };
 
-  const playSampleLocal = (buffer) => {
+  const playSampleLocal = (buffer, playbackRate = 1) => {
     return playSample(
       audioCtxRef.current,
       buffer,
       trainerAnalyserRef,
       trainerSourceRef,
+      playbackRate,
     );
   };
 
@@ -288,7 +290,12 @@ function App() {
     };
 
     if (buffer) {
-      const duration = playSampleLocal(buffer);
+      // Original tonic of samples is A5
+      // Calculate playback rate to detune samples based on current tonic
+      // const originalTonic = 440; // A = 440 Hz
+      // const playbackRate = tonic / originalTonic;
+      const playbackRate = 1;
+      const duration = playSampleLocal(buffer, playbackRate);
       targetNoteDurationRef.current = duration || 1200; // Fallback to 1.2s if duration unavailable
     } else {
       playOscillatorLocal(targetFreq, 1.2);
@@ -750,7 +757,9 @@ function App() {
         onToggleDrone={toggleDrone}
         onTonicChange={(event) => setTonic(Number(event.target.value))}
         onTempoChange={(event) => setTempo(Number(event.target.value))}
-        onAttemptsBeforeRepeatChange={(event) => setAttemptsBeforeRepeat(Number(event.target.value))}
+        onAttemptsBeforeRepeatChange={(event) =>
+          setAttemptsBeforeRepeat(Number(event.target.value))
+        }
       />
 
       <PitchPanel
