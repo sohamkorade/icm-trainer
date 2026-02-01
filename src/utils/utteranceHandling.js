@@ -3,15 +3,11 @@
  */
 
 import {
-  createUtterance,
-  addPitchSample,
-  detectUtteranceEnd,
   checkStability,
   checkExpectedNote,
   checkExpectedLength,
   checkExpectedTiming,
   generateSuggestions,
-  finalizeUtterance,
 } from "./utterance";
 import { getMatchResult } from "./notes";
 
@@ -69,12 +65,9 @@ export function updateUtteranceChecks(
   utterance,
   tonicValue,
   currentTarget,
-  lastUiUpdateRef,
   setCurrentUtterance,
 ) {
-  const now = Date.now();
-
-  // Run checks in real-time
+  // Run checks after utterance has ended
   const stabilityCheck = checkStability(utterance, tonicValue);
   const noteCheck = checkExpectedNote(utterance, tonicValue, currentTarget);
   const lengthCheck = checkExpectedLength(utterance);
@@ -94,10 +87,8 @@ export function updateUtteranceChecks(
     expectedTiming: timingCheck,
   });
 
-  // Update state periodically (throttled to avoid too many re-renders)
-  if (now - lastUiUpdateRef.current > 200) {
-    setCurrentUtterance({ ...utterance });
-  }
+  // Update state (only called once after utterance ends)
+  setCurrentUtterance({ ...utterance });
 }
 
 export function updatePitchMatchUI(

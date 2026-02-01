@@ -11,6 +11,7 @@ import {
   BASE_NOTES,
   NEXT_TARGET_NOTE_WAIT_DURATION_MS,
   GRAPH_TIME_RANGE_MS,
+  MIN_UTTERANCE_MS,
 } from "./constants";
 import { getNoteByLabel } from "./utils/notes";
 import {
@@ -425,44 +426,66 @@ function App() {
       );
       if (ended) {
         finalizeUtterance(currentUtteranceRef.current);
-        utterancesRef.current.push(currentUtteranceRef.current);
 
-        // Add suggestions to graph after utterance ends
-        const finalizedUtterance = currentUtteranceRef.current;
-        if (
-          finalizedUtterance.suggestions &&
-          finalizedUtterance.suggestions.length > 0
-        ) {
-          // Use the average pitch from the utterance for y-position, or current pitch as fallback
-          const validSamples = finalizedUtterance.pitchSamples.filter(
-            (s) => s.pitch > 0 && s.confidence >= 0.3,
-          );
-          const avgPitch =
-            validSamples.length > 0
-              ? validSamples.reduce((sum, s) => sum + s.pitch, 0) /
-                validSamples.length
-              : pitch || 0;
-
-          finalizedUtterance.suggestions.forEach((suggestionMsg) => {
-            addSuggestionToGraph(suggestionMsg, now, avgPitch);
-          });
-        }
-
-        handleUtteranceEnd(
-          currentUtteranceRef,
-          utterancesRef,
-          callAndResponseActiveRef,
-          sequenceNotes,
-          targetIndexRef,
-          resetAttempts,
-          setTargetIndex,
-          initializeMetronome,
-          scheduleNextTargetNote,
-          attemptsLeftRef,
-          setAttemptsLeft,
+        // Run checks now that utterance has ended
+        updateUtteranceChecks(
+          currentUtteranceRef.current,
+          tonicValue,
+          currentTarget,
           setCurrentUtterance,
-          wasSilentRef,
         );
+
+        // Check if utterance duration is less than minimum threshold
+        const utteranceDuration =
+          currentUtteranceRef.current.endTime -
+          currentUtteranceRef.current.startTime;
+
+        if (utteranceDuration >= MIN_UTTERANCE_MS) {
+          utterancesRef.current.push(currentUtteranceRef.current);
+
+          // Add suggestions to graph after utterance ends
+          const finalizedUtterance = currentUtteranceRef.current;
+          if (
+            finalizedUtterance.suggestions &&
+            finalizedUtterance.suggestions.length > 0
+          ) {
+            // Use the average pitch from the utterance for y-position, or current pitch as fallback
+            const validSamples = finalizedUtterance.pitchSamples.filter(
+              (s) => s.pitch > 0 && s.confidence >= 0.3,
+            );
+            const avgPitch =
+              validSamples.length > 0
+                ? validSamples.reduce((sum, s) => sum + s.pitch, 0) /
+                  validSamples.length
+                : pitch || 0;
+
+            finalizedUtterance.suggestions.forEach((suggestionMsg) => {
+              addSuggestionToGraph(suggestionMsg, now, avgPitch);
+            });
+          }
+
+          handleUtteranceEnd(
+            currentUtteranceRef,
+            utterancesRef,
+            callAndResponseActiveRef,
+            sequenceNotes,
+            targetIndexRef,
+            resetAttempts,
+            setTargetIndex,
+            initializeMetronome,
+            scheduleNextTargetNote,
+            attemptsLeftRef,
+            setAttemptsLeft,
+            setCurrentUtterance,
+            wasSilentRef,
+          );
+        } else {
+          // Ignore utterances shorter than MIN_UTTERANCE_MS
+          // Just clear the current utterance without processing it
+          currentUtteranceRef.current = null;
+          setCurrentUtterance(null);
+          wasSilentRef.current = true;
+        }
       }
     }
 
@@ -489,14 +512,6 @@ function App() {
     // Update current utterance with pitch sample
     if (currentUtteranceRef.current && hasSignal) {
       addPitchSample(currentUtteranceRef.current, pitch, pitchConfidence, now);
-
-      updateUtteranceChecks(
-        currentUtteranceRef.current,
-        tonicValue,
-        currentTarget,
-        lastUiUpdateRef,
-        setCurrentUtterance,
-      );
 
       updatePitchMatchUI(
         pitch,

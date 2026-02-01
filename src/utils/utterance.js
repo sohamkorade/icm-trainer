@@ -9,6 +9,7 @@ import {
   calculatePitchVariation,
   isWithinThreshold,
   toNoteValue,
+  getNoteByLabel,
 } from "./notes";
 
 let utteranceIdCounter = 0;
@@ -61,17 +62,23 @@ function detectUtteranceEnd(pitchSamples, rms, silenceThreshold) {
   // Check if we have silence (low RMS)
   if (rms < silenceThreshold) {
     // Check if silence has persisted for required duration
+    // Find the most recent valid pitch sample (with pitch > 0 and confidence >= 0.3)
     const now = Date.now();
-    const recentSamples = pitchSamples.filter(
-      (s) => now - s.timestamp < UTTERANCE_SILENCE_DURATION_MS,
-    );
-
-    // If all recent samples are silence (no pitch or low confidence), utterance ended
-    const hasRecentPitch = recentSamples.some(
+    const validSamples = pitchSamples.filter(
       (s) => s.pitch > 0 && s.confidence >= 0.3,
     );
 
-    return !hasRecentPitch;
+    if (validSamples.length === 0) {
+      // No valid samples at all, utterance ended
+      return true;
+    }
+
+    // Check if the most recent valid sample is older than the silence duration threshold
+    const mostRecentValidSample = validSamples[validSamples.length - 1];
+    const timeSinceLastValidPitch = now - mostRecentValidSample.timestamp;
+
+    // Utterance ended if we've been silent for at least UTTERANCE_SILENCE_DURATION_MS
+    return timeSinceLastValidPitch >= UTTERANCE_SILENCE_DURATION_MS;
   }
 
   return false;
@@ -107,7 +114,7 @@ function checkExpectedNote(utterance, tonicValue, targetLabel) {
     return { isExpectedNote: null, suggestion: null };
   }
 
-  // Use the most recent pitch sample for note matching
+  // Use average pitch and confidence from all valid samples
   const recentSamples = utterance.pitchSamples.filter(
     (s) => s.pitch > 0 && s.confidence >= 0.3,
   );
@@ -115,11 +122,16 @@ function checkExpectedNote(utterance, tonicValue, targetLabel) {
     return { isExpectedNote: null, suggestion: null };
   }
 
-  // Use the latest sample
-  const latestSample = recentSamples[recentSamples.length - 1];
+  // Calculate average pitch and average confidence
+  const avgPitch =
+    recentSamples.reduce((sum, s) => sum + s.pitch, 0) / recentSamples.length;
+  const avgConfidence =
+    recentSamples.reduce((sum, s) => sum + s.confidence, 0) /
+    recentSamples.length;
+
   const match = getMatchResult({
-    pitch: latestSample.pitch,
-    pitchConfidence: latestSample.confidence,
+    pitch: avgPitch,
+    pitchConfidence: avgConfidence,
     tonicValue,
     targetLabel,
   });
@@ -135,19 +147,24 @@ function checkExpectedNote(utterance, tonicValue, targetLabel) {
 
   let suggestion = null;
   if (!isExpectedNote) {
-    if (match.closest.note.label !== targetLabel) {
-      const noteValue = toNoteValue(tonicValue, latestSample.pitch);
-      const targetNote = match.closest.note;
-      const targetSemitone = targetNote.semitone;
-      const nearestTarget =
-        targetSemitone + 12 * Math.round((noteValue - targetSemitone) / 12);
-      const delta = nearestTarget - noteValue;
-      const notesOff = Math.max(0.1, Math.round(Math.abs(delta) * 10) / 10);
-      const direction = delta > 0 ? "up" : "down";
-      suggestion = `Go ${direction} by ${notesOff} semitones to reach ${targetLabel}.`;
-    } else {
+    if (match.closest.note.label === targetLabel) {
       const cents = Math.abs(match.closest.cents);
       suggestion = `Adjust pitch by ${cents.toFixed(1)} cents to match ${targetLabel}.`;
+    } else {
+      // User sang a different note than expected
+      const noteValue = toNoteValue(tonicValue, avgPitch); // What they actually sang
+      const expectedNote = getNoteByLabel(targetLabel); // What they should sing
+      if (!expectedNote) {
+        suggestion = `Sing ${targetLabel}.`;
+        return { isExpectedNote, suggestion };
+      }
+
+      // Compare with the exact expected note octave
+      const expectedSemitone = expectedNote.semitone;
+      const delta = expectedSemitone - noteValue;
+      const notesOff = Math.round(Math.abs(delta) * 10) / 10;
+      const direction = delta > 0 ? "up" : "down";
+      suggestion = `Go ${direction} by ${notesOff} semitones to reach ${targetLabel}.`;
     }
   }
 

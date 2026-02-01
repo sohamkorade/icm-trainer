@@ -83,6 +83,7 @@ const UTTERANCE_SILENCE_DURATION_MS = 100; // Duration of silence to detect utte
 const TARGET_NOTE_GAP_MS = 500; // Gap after target note finishes before expected start
 const NEXT_TARGET_NOTE_WAIT_DURATION_MS = 500; // Wait duration before playing next target note after utterance ends
 const GRAPH_TIME_RANGE_MS = 10000; // Time range displayed in graph (10 seconds) - larger = slower scroll
+const MIN_UTTERANCE_MS = 500; // Minimum utterance duration in milliseconds to be considered valid
 
 export {
   BASE_NOTES,
@@ -106,4 +107,5 @@ export {
   TARGET_NOTE_GAP_MS,
   NEXT_TARGET_NOTE_WAIT_DURATION_MS,
   GRAPH_TIME_RANGE_MS,
+  MIN_UTTERANCE_MS,
 };
