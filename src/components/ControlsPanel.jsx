@@ -7,12 +7,14 @@ function ControlsPanel({
   tonic,
   tonicOptions,
   tempo,
+  usePitchCurveComparison,
   onStart,
   onStop,
   onToggleDrone,
   onTonicChange,
   onTempoChange,
   onListen,
+  onCheckingModeChange,
 }) {
   return (
     <section className="panel">
@@ -54,6 +56,15 @@ function ControlsPanel({
         <button onClick={onListen} disabled={!audioReady}>
           Listen
         </button>
+        <label className="inline-checkbox">
+          <input
+            type="checkbox"
+            checked={usePitchCurveComparison}
+            onChange={onCheckingModeChange}
+            disabled={!audioReady}
+          />
+          <span>Use Pitch Curve Comparison</span>
+        </label>
       </div>
     </section>
   );
@@ -72,10 +83,12 @@ ControlsPanel.propTypes = {
     }),
   ).isRequired,
   tempo: PropTypes.number.isRequired,
+  usePitchCurveComparison: PropTypes.bool.isRequired,
   onStart: PropTypes.func.isRequired,
   onStop: PropTypes.func.isRequired,
   onListen: PropTypes.func.isRequired,
   onToggleDrone: PropTypes.func.isRequired,
   onTonicChange: PropTypes.func.isRequired,
   onTempoChange: PropTypes.func.isRequired,
+  onCheckingModeChange: PropTypes.func.isRequired,
 };

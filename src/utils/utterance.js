@@ -7,7 +7,6 @@ import {
 import {
   getMatchResult,
   calculatePitchVariation,
-  isWithinThreshold,
   toNoteValue,
   getNoteByLabel,
 } from "./notes";
@@ -233,6 +232,219 @@ function checkExpectedTiming(utterance, toleranceMs = TIMING_TOLERANCE_MS) {
   return { isAtExpectedTime, suggestion };
 }
 
+function checkPitchCurveComparison(
+  utterance,
+  trainerPitchHistory,
+  trainerPitchTimestamps,
+  targetNotePlayTime,
+) {
+  if (
+    !utterance ||
+    !trainerPitchHistory ||
+    !trainerPitchTimestamps ||
+    trainerPitchHistory.length === 0 ||
+    utterance.pitchSamples.length === 0 ||
+    targetNotePlayTime === null
+  ) {
+    return {
+      rating: null,
+      score: null,
+      suggestion: null,
+    };
+  }
+
+  // Filter valid user pitch samples
+  const userSamples = utterance.pitchSamples.filter(
+    (s) => s.pitch > 0 && s.confidence >= 0.3,
+  );
+
+  if (userSamples.length === 0) {
+    return {
+      rating: null,
+      score: null,
+      suggestion: "No valid pitch samples detected.",
+    };
+  }
+
+  // Extract trainer pitch samples that occurred during the target note playback
+  // Trainer pitch starts at targetNotePlayTime and continues for the duration
+  const trainerSamples = [];
+  for (let i = 0; i < trainerPitchHistory.length; i++) {
+    const timestamp = trainerPitchTimestamps[i];
+    const pitch = trainerPitchHistory[i];
+    if (
+      pitch > 0 &&
+      timestamp >= targetNotePlayTime &&
+      timestamp <= targetNotePlayTime + utterance.expectedDuration + 1000
+    ) {
+      trainerSamples.push({ timestamp, pitch });
+    }
+  }
+
+  if (trainerSamples.length === 0) {
+    return {
+      rating: null,
+      score: null,
+      suggestion: "No trainer pitch data available for comparison.",
+    };
+  }
+
+  // Normalize time ranges: align user samples relative to utterance start
+  // and trainer samples relative to target note play time
+  const userStartTime = userSamples[0].timestamp;
+  const trainerStartTime = trainerSamples[0].timestamp;
+
+  // Resample both curves to a common time grid for comparison
+  // Use the shorter duration as the comparison window
+  const userDuration =
+    userSamples[userSamples.length - 1].timestamp - userStartTime;
+  const trainerDuration =
+    trainerSamples[trainerSamples.length - 1].timestamp - trainerStartTime;
+  const comparisonDuration = Math.min(userDuration, trainerDuration);
+
+  if (comparisonDuration < 100) {
+    // Too short to compare meaningfully
+    return {
+      rating: null,
+      score: null,
+      suggestion: "Utterance too short for comparison.",
+    };
+  }
+
+  // Create time-aligned pitch arrays
+  const numPoints = Math.min(
+    50,
+    Math.max(10, Math.floor(comparisonDuration / 20)),
+  ); // Sample every ~20ms, max 50 points
+  const userPitches = [];
+  const trainerPitches = [];
+
+  for (let i = 0; i < numPoints; i++) {
+    const relativeTime =
+      numPoints > 1 ? (i / (numPoints - 1)) * comparisonDuration : 0;
+    const userTime = userStartTime + relativeTime;
+    const trainerTime = trainerStartTime + relativeTime;
+
+    // Interpolate user pitch
+    let userPitch = null;
+    for (let j = 0; j < userSamples.length - 1; j++) {
+      if (
+        userSamples[j].timestamp <= userTime &&
+        userSamples[j + 1].timestamp >= userTime
+      ) {
+        const t =
+          (userTime - userSamples[j].timestamp) /
+          (userSamples[j + 1].timestamp - userSamples[j].timestamp);
+        userPitch =
+          userSamples[j].pitch * (1 - t) + userSamples[j + 1].pitch * t;
+        break;
+      }
+    }
+    if (userPitch === null && i === 0) {
+      userPitch = userSamples[0].pitch;
+    } else if (userPitch === null) {
+      userPitch = userSamples[userSamples.length - 1].pitch;
+    }
+
+    // Interpolate trainer pitch
+    let trainerPitch = null;
+    for (let j = 0; j < trainerSamples.length - 1; j++) {
+      if (
+        trainerSamples[j].timestamp <= trainerTime &&
+        trainerSamples[j + 1].timestamp >= trainerTime
+      ) {
+        const t =
+          (trainerTime - trainerSamples[j].timestamp) /
+          (trainerSamples[j + 1].timestamp - trainerSamples[j].timestamp);
+        trainerPitch =
+          trainerSamples[j].pitch * (1 - t) + trainerSamples[j + 1].pitch * t;
+        break;
+      }
+    }
+    if (trainerPitch === null && i === 0) {
+      trainerPitch = trainerSamples[0].pitch;
+    } else if (trainerPitch === null) {
+      trainerPitch = trainerSamples[trainerSamples.length - 1].pitch;
+    }
+
+    if (userPitch !== null && trainerPitch !== null) {
+      userPitches.push(userPitch);
+      trainerPitches.push(trainerPitch);
+    }
+  }
+
+  if (userPitches.length === 0 || trainerPitches.length === 0) {
+    return {
+      rating: null,
+      score: null,
+      suggestion: "Could not align pitch curves for comparison.",
+    };
+  }
+
+  // Calculate similarity metrics
+  // Use log frequency space for better comparison (pitch perception is logarithmic)
+  const logUserPitches = userPitches.map((p) => Math.log2(p));
+  const logTrainerPitches = trainerPitches.map((p) => Math.log2(p));
+
+  // Calculate mean squared error in semitones (12 semitones per octave = log2 ratio)
+  let mse = 0;
+  let validPoints = 0;
+  for (
+    let i = 0;
+    i < Math.min(userPitches.length, trainerPitches.length);
+    i++
+  ) {
+    const diffSemitones =
+      Math.abs(logUserPitches[i] - logTrainerPitches[i]) * 12;
+    mse += diffSemitones * diffSemitones;
+    validPoints++;
+  }
+  mse = mse / validPoints;
+
+  // Calculate average absolute difference in semitones
+  let avgDiff = 0;
+  for (
+    let i = 0;
+    i < Math.min(userPitches.length, trainerPitches.length);
+    i++
+  ) {
+    avgDiff += Math.abs(logUserPitches[i] - logTrainerPitches[i]) * 12;
+  }
+  avgDiff = avgDiff / validPoints;
+
+  // Convert to a score (0-100, higher is better)
+  // Perfect match (0 semitones) = 100, 1 semitone avg = ~80, 2 semitones = ~60, etc.
+  const score = Math.max(0, Math.min(100, 100 - avgDiff * 20));
+
+  // Determine rating and suggestion
+  let rating;
+  let suggestion;
+  if (score >= 90) {
+    rating = "excellent";
+    suggestion = "Very close!";
+  } else if (score >= 75) {
+    rating = "good";
+    suggestion = "Close!";
+  } else if (score >= 60) {
+    rating = "fair";
+    suggestion = `Fair. Try again!`;
+  } else if (score >= 40) {
+    rating = "poor";
+    suggestion = `Needs improvement. Focus!`;
+  } else {
+    rating = "very_poor";
+    suggestion = `Poor. Listen carefully!`;
+  }
+
+  return {
+    rating,
+    score,
+    suggestion,
+    avgDiffSemitones: avgDiff,
+    mse,
+  };
+}
+
 function generateSuggestions(utterance, checks) {
   const suggestions = [];
 
@@ -250,6 +462,11 @@ function generateSuggestions(utterance, checks) {
 
   if (checks.expectedTiming?.suggestion) {
     suggestions.push(checks.expectedTiming.suggestion);
+  }
+
+  // Add pitch curve comparison suggestion if available
+  if (checks.pitchCurveComparison?.suggestion) {
+    suggestions.push(checks.pitchCurveComparison.suggestion);
   }
 
   return suggestions;
@@ -270,6 +487,7 @@ export {
   checkExpectedNote,
   checkExpectedLength,
   checkExpectedTiming,
+  checkPitchCurveComparison,
   generateSuggestions,
   finalizeUtterance,
 };

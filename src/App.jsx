@@ -56,6 +56,7 @@ function App() {
   const [isCallAndResponseActive, setIsCallAndResponseActive] = useState(false);
   const [tempo, setTempo] = useState(DEFAULT_TEMPO_BPM);
   const [currentUtterance, setCurrentUtterance] = useState(null);
+  const [usePitchCurveComparison, setUsePitchCurveComparison] = useState(false);
 
   const audioCtxRef = useRef(null);
   const analyserRef = useRef(null);
@@ -80,6 +81,7 @@ function App() {
   const modeRef = useRef(mode);
   const tonicRef = useRef(tonic);
   const tempoRef = useRef(tempo);
+  const usePitchCurveComparisonRef = useRef(usePitchCurveComparison);
 
   // Utterance tracking
   const currentUtteranceRef = useRef(null);
@@ -131,6 +133,10 @@ function App() {
   useEffect(() => {
     tempoRef.current = tempo;
   }, [tempo]);
+
+  useEffect(() => {
+    usePitchCurveComparisonRef.current = usePitchCurveComparison;
+  }, [usePitchCurveComparison]);
 
   const ensureAudioContext = async () => {
     if (audioCtxRef.current) {
@@ -433,6 +439,10 @@ function App() {
           tonicValue,
           currentTarget,
           setCurrentUtterance,
+          usePitchCurveComparisonRef.current,
+          trainerPitchHistoryRef.current,
+          trainerPitchHistoryTimestampsRef.current,
+          targetNotePlayTimeRef.current,
         );
 
         // Check if utterance duration is less than minimum threshold
@@ -723,12 +733,16 @@ function App() {
         tonic={tonic}
         tonicOptions={TONIC_OPTIONS}
         tempo={tempo}
+        usePitchCurveComparison={usePitchCurveComparison}
         onStart={handleStart}
         onStop={handleStop}
         onToggleDrone={toggleDrone}
         onTonicChange={(event) => setTonic(Number(event.target.value))}
         onTempoChange={(event) => setTempo(Number(event.target.value))}
         onListen={startCallAndResponse}
+        onCheckingModeChange={(event) =>
+          setUsePitchCurveComparison(event.target.checked)
+        }
       />
 
       <PitchPanel
