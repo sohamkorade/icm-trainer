@@ -163,8 +163,14 @@ function checkExpectedNote(utterance, tonicValue, targetLabel) {
       const expectedSemitone = expectedNote.semitone;
       const delta = expectedSemitone - noteValue;
       const notesOff = Math.round(Math.abs(delta) * 10) / 10;
-      const direction = delta > 0 ? "up" : "down";
-      suggestion = `Go ${direction} by ${notesOff} semitones to reach ${targetLabel}.`;
+      if (notesOff > 11) {
+        // octave off actually
+        const direction = delta > 0 ? "higher" : "lower";
+        suggestion = `Sing in ${direction} octave`;
+      } else {
+        const direction = delta > 0 ? "up" : "down";
+        suggestion = `Go ${direction} by ${notesOff} semitones to reach ${targetLabel}.`;
+      }
     }
   }
 
@@ -188,9 +194,9 @@ function checkExpectedLength(utterance, toleranceMs = LENGTH_TOLERANCE_MS) {
   let suggestion = null;
   if (!isExpectedLength) {
     if (difference > 0) {
-      suggestion = `Hold the note shorter - expected ${utterance.expectedDuration}ms, held for ${Math.round(actualDuration)}ms.`;
+      suggestion = `Hold the note shorter`;
     } else {
-      suggestion = `Hold the note longer - expected ${utterance.expectedDuration}ms, held for ${Math.round(actualDuration)}ms.`;
+      suggestion = `Hold the note longer`;
     }
   }
 
