@@ -4,11 +4,13 @@ Browser-based pitch training for Indian Classical Music exercises. The app liste
 detects pitch in real time, and guides you toward the current target note.
 
 ## Features
+
 - Real-time pitch detection (YIN)
 - Target-note progression with stability detection
 - Drone and target-note playback
 
 ## Getting Started
+
 ```bash
 npm install
 npm run dev
