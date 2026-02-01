@@ -98,6 +98,28 @@ input[type="file"] {
   padding: 6px;
 }
 
+.combo-box {
+  position: relative;
+  width: 100%;
+}
+
+.combo-input {
+  background: #111621;
+  color: #f4f6fb;
+  border: 1px solid #293145;
+  border-radius: 8px;
+  padding: 6px 10px;
+  width: 100%;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.combo-input:focus {
+  outline: none;
+  border-color: #5b6cff;
+  box-shadow: 0 0 0 2px rgba(91, 108, 255, 0.2);
+}
+
 .checkbox {
   flex-direction: row;
   align-items: center;

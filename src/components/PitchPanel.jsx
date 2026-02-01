@@ -14,21 +14,31 @@ function PitchPanel({
   sequence,
   targetIndex,
   sequenceOptions,
-  mode,
-  onModeChange,
+  exerciseInputValue,
+  onExerciseInputChange,
 }) {
   return (
     <section className="panel">
       <div className="status">
         <label className="sequence-select">
           <span>Exercise</span>
-          <select value={mode} onChange={onModeChange}>
-            {sequenceOptions.map((option) => (
-              <option key={option.key} value={option.key}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <div className="combo-box">
+            <input
+              type="text"
+              list="exercise-options"
+              value={exerciseInputValue}
+              onChange={onExerciseInputChange}
+              placeholder="Type or select an exercise..."
+              className="combo-input"
+            />
+            <datalist id="exercise-options">
+              {sequenceOptions.map((option) => (
+                <option key={option.key} value={option.label}>
+                  {option.label}
+                </option>
+              ))}
+            </datalist>
+          </div>
         </label>
         <div className="status-text">{status}</div>
       </div>
@@ -81,6 +91,6 @@ PitchPanel.propTypes = {
       label: PropTypes.string.isRequired,
     }),
   ).isRequired,
-  mode: PropTypes.string.isRequired,
-  onModeChange: PropTypes.func.isRequired,
+  exerciseInputValue: PropTypes.string.isRequired,
+  onExerciseInputChange: PropTypes.func.isRequired,
 };

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   MAX_HISTORY,
-  MODE_SEQUENCES,
   SAMPLE_FOLDER,
   TONIC_OPTIONS,
   DEFAULT_TEMPO_BPM,
@@ -38,11 +37,27 @@ import {
 import ControlsPanel from "./components/ControlsPanel";
 import PitchPanel from "./components/PitchPanel";
 
+// Hardcoded example exercises
+const EXAMPLE_EXERCISES = [
+  { key: "sp", label: "S P" },
+  { key: "sps", label: "S P S'" },
+  { key: "sargam", label: "S R2 G2 M1 P D2 N2 S'" },
+  {
+    key: "srg rgm",
+    label: "S R2 G2 R2 G2 M1 G2 M1 P M1 P D2 P D2 N2 D2 N2 S'",
+  },
+  { key: "mayamalavagowla", label: "S R1 G2 M1 P D1 N2 S'" },
+  { key: "avroh", label: "S' N2 D2 P M1 G2 R2 S" },
+];
+
 function App() {
   const [audioReady, setAudioReady] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isDroneOn, setIsDroneOn] = useState(false);
-  const [mode, setMode] = useState("sargam");
+  const [exerciseInputValue, setExerciseInputValue] = useState(
+    "S R2 G2 M1 P D2 N2 S'",
+  );
+  const [customSequence, setCustomSequence] = useState(null);
   const [tonic, setTonic] = useState(TONIC_OPTIONS[21].freq);
   const [targetIndex, setTargetIndex] = useState(0);
   const [detectedPitch, setDetectedPitch] = useState(0);
@@ -78,7 +93,8 @@ function App() {
   const pitchErrorRef = useRef(false);
   const samplesLoadedRef = useRef(false);
   const targetIndexRef = useRef(targetIndex);
-  const modeRef = useRef(mode);
+  const exerciseInputValueRef = useRef(exerciseInputValue);
+  const customSequenceRef = useRef(null);
   const tonicRef = useRef(tonic);
   const tempoRef = useRef(tempo);
   const usePitchCurveComparisonRef = useRef(usePitchCurveComparison);
@@ -94,21 +110,41 @@ function App() {
   const nextTargetNoteTimeoutRef = useRef(null);
   const suggestionsRef = useRef([]); // Array of {message, timestamp, pitch}
 
-  const sequence = useMemo(() => MODE_SEQUENCES[mode], [mode]);
-  const sequenceNotes = useMemo(() => sequence.notes || [], [sequence]);
+  // Parse custom sequence from input string
+  const parseCustomSequence = (inputValue) => {
+    if (!inputValue || inputValue.trim() === "") {
+      return null;
+    }
+    const notes = inputValue
+      .trim()
+      .split(/\s+/)
+      .filter((note) => note.length > 0);
+    if (notes.length === 0) {
+      return null;
+    }
+    return {
+      notes,
+      durations: notes.map(() => 1000), // Default duration of 1 second per note
+    };
+  };
+
+  const sequence = useMemo(() => {
+    if (customSequence) {
+      return customSequence;
+    }
+    // Parse the current input value
+    return (
+      parseCustomSequence(exerciseInputValue) ||
+      parseCustomSequence("S R2 G2 M1 P D2 N2 S'")
+    );
+  }, [customSequence, exerciseInputValue]);
+  const sequenceNotes = useMemo(() => sequence?.notes || [], [sequence]);
   const targetLabel = sequenceNotes[targetIndex];
-  const sequenceOptions = useMemo(
-    () =>
-      Object.entries(MODE_SEQUENCES).map(([key, seq]) => ({
-        key,
-        label: (seq.notes || seq).join(" "),
-      })),
-    [],
-  );
+  const sequenceOptions = useMemo(() => EXAMPLE_EXERCISES, []);
   const sampleLabels = useMemo(() => {
     const labels = new Set(BASE_NOTES.map((note) => note.label));
-    Object.values(MODE_SEQUENCES).forEach((modeSequence) => {
-      const notes = modeSequence.notes || modeSequence;
+    EXAMPLE_EXERCISES.forEach((exercise) => {
+      const notes = exercise.label.split(/\s+/);
       notes.forEach((label) => labels.add(label));
     });
     return Array.from(labels);
@@ -119,8 +155,8 @@ function App() {
   }, [targetIndex]);
 
   useEffect(() => {
-    modeRef.current = mode;
-  }, [mode]);
+    exerciseInputValueRef.current = exerciseInputValue;
+  }, [exerciseInputValue]);
 
   useEffect(() => {
     tonicRef.current = tonic;
@@ -137,6 +173,10 @@ function App() {
   useEffect(() => {
     usePitchCurveComparisonRef.current = usePitchCurveComparison;
   }, [usePitchCurveComparison]);
+
+  useEffect(() => {
+    customSequenceRef.current = customSequence;
+  }, [customSequence]);
 
   const ensureAudioContext = async () => {
     if (audioCtxRef.current) {
@@ -412,8 +452,20 @@ function App() {
 
   const updateUtteranceState = (pitch, pitchConfidence, rms) => {
     const tonicValue = tonicRef.current;
-    const currentSequence = MODE_SEQUENCES[modeRef.current];
-    const sequenceNotes = currentSequence.notes || currentSequence;
+    let currentSequence = customSequenceRef.current;
+    if (!currentSequence) {
+      currentSequence = parseCustomSequence(exerciseInputValueRef.current);
+      if (!currentSequence) {
+        const defaultExercise = EXAMPLE_EXERCISES.find(
+          (ex) => ex.key === "sargam",
+        );
+        currentSequence = defaultExercise
+          ? parseCustomSequence(defaultExercise.label)
+          : null;
+      }
+    }
+    console.log("currentSequence", currentSequence);
+    const sequenceNotes = currentSequence?.notes || [];
     const sequenceDurations =
       currentSequence.durations || sequenceNotes.map(() => 1000);
     const currentTarget = sequenceNotes[targetIndexRef.current];
@@ -657,8 +709,19 @@ function App() {
     const tonicValue = tonicRef.current;
     const { minFreq, maxFreq, minLog, logRange } = getPitchRange(tonicValue);
     const toY = makeYMapper(height, minLog, logRange);
-    const currentSequence = MODE_SEQUENCES[modeRef.current];
-    const sequenceNotes = currentSequence.notes || currentSequence;
+    let currentSequence = customSequenceRef.current;
+    if (!currentSequence) {
+      currentSequence = parseCustomSequence(exerciseInputValueRef.current);
+      if (!currentSequence) {
+        const defaultExercise = EXAMPLE_EXERCISES.find(
+          (ex) => ex.key === "sargam",
+        );
+        currentSequence = defaultExercise
+          ? parseCustomSequence(defaultExercise.label)
+          : null;
+      }
+    }
+    const sequenceNotes = currentSequence?.notes || [];
     const activeLabels = new Set(
       sequenceNotes.map((label) => label.replace(/[.']+$/, "")),
     );
@@ -719,7 +782,21 @@ function App() {
 
   useEffect(() => {
     setTargetIndex(0);
-  }, [mode]);
+  }, [customSequence, exerciseInputValue]);
+
+  // Handle exercise input change
+  const handleExerciseInputChange = (event) => {
+    const inputValue = event.target.value;
+    setExerciseInputValue(inputValue);
+
+    // Parse the input value
+    const parsed = parseCustomSequence(inputValue);
+    if (parsed) {
+      setCustomSequence(parsed);
+    } else {
+      setCustomSequence(null);
+    }
+  };
 
   return (
     <div className="app">
@@ -758,8 +835,8 @@ function App() {
         sequence={sequenceNotes}
         targetIndex={targetIndex}
         sequenceOptions={sequenceOptions}
-        mode={mode}
-        onModeChange={(event) => setMode(event.target.value)}
+        exerciseInputValue={exerciseInputValue}
+        onExerciseInputChange={handleExerciseInputChange}
         currentUtterance={currentUtterance}
       />
     </div>

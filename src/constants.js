@@ -27,21 +27,6 @@ const NOTE_DEFS = [
   })),
 ];
 
-const MODE_SEQUENCES = {
-  sp: {
-    notes: ["S", "P"],
-    durations: [1000, 1000],
-  },
-  sps: {
-    notes: ["S", "P", "S'"],
-    durations: [1000, 1000, 1000],
-  },
-  sargam: {
-    notes: ["S", "R2", "G2", "M1", "P", "D2", "N2", "S'"],
-    durations: [1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000],
-  },
-};
-
 const NOTE_NAMES = [
   "C",
   "C#",
@@ -87,7 +72,6 @@ const MIN_UTTERANCE_MS = 500; // Minimum utterance duration in milliseconds to b
 export {
   BASE_NOTES,
   NOTE_DEFS,
-  MODE_SEQUENCES,
   TONIC_OPTIONS,
   MAX_HISTORY,
   IN_TUNE_CENTS,
