@@ -32,9 +32,7 @@ import {
   getPitchRange,
   makeYMapper,
   drawGridLines,
-  drawTargetLine,
   drawPitchHistory,
-  drawExpectedTiming,
   drawSuggestions,
 } from "./utils/drawing";
 import ControlsPanel from "./components/ControlsPanel";
@@ -644,16 +642,6 @@ function App() {
     );
 
     drawGridLines(ctx, width, toY, tonicValue, minFreq, maxFreq, activeLabels);
-    drawTargetLine(
-      ctx,
-      width,
-      toY,
-      tonicValue,
-      minFreq,
-      maxFreq,
-      modeRef,
-      targetIndexRef,
-    );
 
     // Draw expected timing indicators for all utterances that are still visible
     // (including completed ones that haven't scrolled off the left side)
@@ -672,36 +660,6 @@ function App() {
       suggestionsRef.current = suggestionsRef.current.filter((suggestion) => {
         return suggestion.timestamp >= windowStartTime; // Keep if still visible
       });
-
-      // Draw all completed utterances
-      utterancesRef.current.forEach((utterance) => {
-        drawExpectedTiming(
-          ctx,
-          width,
-          height,
-          toY,
-          utterance,
-          timestamps,
-          tonicValue,
-          minFreq,
-          maxFreq,
-        );
-      });
-
-      // Draw current utterance if it exists
-      if (currentUtteranceRef.current) {
-        drawExpectedTiming(
-          ctx,
-          width,
-          height,
-          toY,
-          currentUtteranceRef.current,
-          timestamps,
-          tonicValue,
-          minFreq,
-          maxFreq,
-        );
-      }
     }
 
     // Draw trainer pitch (during target note playback) in orange
