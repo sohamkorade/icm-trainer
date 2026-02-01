@@ -82,7 +82,7 @@ export function updateUtteranceChecks(
   // Generate suggestions
   utterance.suggestions = generateSuggestions(utterance, {
     stability: stabilityCheck,
-    expectedNote: noteCheck,
+    expectedNote: stabilityCheck.isStable ? noteCheck : null,
     expectedLength: lengthCheck,
     expectedTiming: timingCheck,
   });

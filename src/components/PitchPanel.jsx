@@ -17,7 +17,6 @@ function PitchPanel({
   sequenceOptions,
   mode,
   onModeChange,
-  currentUtterance,
 }) {
   return (
     <section className="panel">
@@ -90,13 +89,4 @@ PitchPanel.propTypes = {
   ).isRequired,
   mode: PropTypes.string.isRequired,
   onModeChange: PropTypes.func.isRequired,
-  currentUtterance: PropTypes.shape({
-    checks: PropTypes.shape({
-      isStable: PropTypes.bool,
-      isExpectedNote: PropTypes.bool,
-      isExpectedLength: PropTypes.bool,
-      isAtExpectedTime: PropTypes.bool,
-    }),
-    suggestions: PropTypes.arrayOf(PropTypes.string),
-  }),
 };
