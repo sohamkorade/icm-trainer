@@ -282,6 +282,11 @@ function App() {
     const now = Date.now();
     targetNotePlayTimeRef.current = now;
 
+    // Draw target note text in graph when trainer sample starts playing
+    // keep the text above the pitch curve
+    const textFreq = tonic * Math.pow(2, (note.semitone + 2) / 12);
+    addSuggestionToGraph(label, now, textFreq);
+
     notePlayCountsRef.current = {
       ...notePlayCountsRef.current,
       [label]: (notePlayCountsRef.current[label] || 0) + 1,
