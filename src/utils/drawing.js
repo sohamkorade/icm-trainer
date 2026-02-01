@@ -2,12 +2,7 @@
  * Drawing utilities for the pitch graph canvas
  */
 
-import {
-  BASE_NOTES,
-  MODE_SEQUENCES,
-  MAX_HISTORY,
-  GRAPH_TIME_RANGE_MS,
-} from "../constants";
+import { BASE_NOTES, MODE_SEQUENCES, GRAPH_TIME_RANGE_MS } from "../constants";
 import { getNoteByLabel } from "./notes";
 
 export function getCanvasMetrics(canvas) {
@@ -27,7 +22,7 @@ export function getCanvasMetrics(canvas) {
 }
 
 export function getPitchRange(tonicValue) {
-  const minFreq = tonicValue * Math.pow(2, -1);
+  const minFreq = tonicValue * Math.pow(2, -1.5);
   const maxFreq = tonicValue * Math.pow(2, 1.5);
   const minLog = Math.log2(minFreq);
   const maxLog = Math.log2(maxFreq);
@@ -60,7 +55,13 @@ export function drawGridLines(
       }
       ctx.strokeStyle = activeLabels.has(note.label)
         ? "#22293a"
-        : "rgba(34, 41, 58, 0.5)";
+        : "rgba(34, 41, 58, 0.2)";
+
+      // bright line for tonic
+      if (note.semitone === 0) {
+        ctx.strokeStyle = "#eee";
+      }
+
       const y = toY(freq);
       ctx.beginPath();
       ctx.moveTo(0, y);
@@ -110,7 +111,6 @@ export function drawPitchHistory(
   history,
   timestamps,
   color,
-  referenceTimestamps,
   breakOnGaps = false,
   gapThresholdMs = 500,
 ) {
@@ -170,7 +170,6 @@ export function drawSuggestions(
   toY,
   suggestions,
   timestamps,
-  tonicValue,
   minFreq,
   maxFreq,
 ) {
