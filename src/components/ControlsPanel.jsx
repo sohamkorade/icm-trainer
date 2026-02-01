@@ -7,11 +7,13 @@ function ControlsPanel({
   tonic,
   tonicOptions,
   tempo,
+  attemptsBeforeRepeat,
   onStart,
   onStop,
   onToggleDrone,
   onTonicChange,
   onTempoChange,
+  onAttemptsBeforeRepeatChange,
 }) {
   return (
     <section className="panel">
@@ -39,7 +41,7 @@ function ControlsPanel({
             ))}
           </select>
         </label>
-        <label className="inline-input">
+        {/* <label className="inline-input">
           <span>Tempo (BPM)</span>
           <input
             type="number"
@@ -47,6 +49,17 @@ function ControlsPanel({
             max="200"
             value={tempo}
             onChange={onTempoChange}
+            disabled={!audioReady}
+          />
+        </label> */}
+        <label className="inline-input">
+          <span>Attempts Before Repeat</span>
+          <input
+            type="number"
+            min="1"
+            max="10"
+            value={attemptsBeforeRepeat}
+            onChange={onAttemptsBeforeRepeatChange}
             disabled={!audioReady}
           />
         </label>
@@ -68,9 +81,11 @@ ControlsPanel.propTypes = {
     }),
   ).isRequired,
   tempo: PropTypes.number.isRequired,
+  attemptsBeforeRepeat: PropTypes.number.isRequired,
   onStart: PropTypes.func.isRequired,
   onStop: PropTypes.func.isRequired,
   onToggleDrone: PropTypes.func.isRequired,
   onTonicChange: PropTypes.func.isRequired,
   onTempoChange: PropTypes.func.isRequired,
+  onAttemptsBeforeRepeatChange: PropTypes.func.isRequired,
 };

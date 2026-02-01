@@ -47,9 +47,7 @@ export function handleUtteranceEnd(
     const newAttemptsLeft = Math.max(0, attemptsLeftRef.current - 1);
     attemptsLeftRef.current = newAttemptsLeft;
     setAttemptsLeft(newAttemptsLeft);
-    if (newAttemptsLeft > 0) {
-      scheduleNextTargetNote(sequenceNotes[targetIndexRef.current]);
-    } else {
+    if (newAttemptsLeft == 0) {
       resetAttempts();
       initializeMetronome();
       scheduleNextTargetNote(sequenceNotes[targetIndexRef.current]);

@@ -59,6 +59,7 @@ function App() {
   const [isCallAndResponseActive, setIsCallAndResponseActive] = useState(false);
   const [attemptsLeft, setAttemptsLeft] = useState(ATTEMPT_COUNT);
   const [tempo, setTempo] = useState(DEFAULT_TEMPO_BPM);
+  const [attemptsBeforeRepeat, setAttemptsBeforeRepeat] = useState(ATTEMPT_COUNT);
   const [currentUtterance, setCurrentUtterance] = useState(null);
 
   const audioCtxRef = useRef(null);
@@ -85,6 +86,7 @@ function App() {
   const modeRef = useRef(mode);
   const tonicRef = useRef(tonic);
   const tempoRef = useRef(tempo);
+  const attemptsBeforeRepeatRef = useRef(attemptsBeforeRepeat);
 
   // Utterance tracking
   const currentUtteranceRef = useRef(null);
@@ -136,6 +138,10 @@ function App() {
   useEffect(() => {
     tempoRef.current = tempo;
   }, [tempo]);
+
+  useEffect(() => {
+    attemptsBeforeRepeatRef.current = attemptsBeforeRepeat;
+  }, [attemptsBeforeRepeat]);
 
   const ensureAudioContext = async () => {
     if (audioCtxRef.current) {
@@ -317,8 +323,9 @@ function App() {
   };
 
   const resetAttempts = () => {
-    attemptsLeftRef.current = ATTEMPT_COUNT;
-    setAttemptsLeft(ATTEMPT_COUNT);
+    const attempts = attemptsBeforeRepeatRef.current;
+    attemptsLeftRef.current = attempts;
+    setAttemptsLeft(attempts);
   };
 
   const initializeMetronome = () => {
@@ -737,11 +744,13 @@ function App() {
         tonic={tonic}
         tonicOptions={TONIC_OPTIONS}
         tempo={tempo}
+        attemptsBeforeRepeat={attemptsBeforeRepeat}
         onStart={handleStart}
         onStop={handleStop}
         onToggleDrone={toggleDrone}
         onTonicChange={(event) => setTonic(Number(event.target.value))}
         onTempoChange={(event) => setTempo(Number(event.target.value))}
+        onAttemptsBeforeRepeatChange={(event) => setAttemptsBeforeRepeat(Number(event.target.value))}
       />
 
       <PitchPanel
