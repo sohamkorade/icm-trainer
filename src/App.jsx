@@ -6,7 +6,6 @@ import {
   MODE_SEQUENCES,
   BASE_NOTES,
   STABLE_MS,
-  SAMPLE_EXTENSIONS,
   SAMPLE_FOLDER,
   TONIC_OPTIONS,
 } from "./constants";
@@ -114,23 +113,16 @@ function App() {
     setStatus("Loading vocalist samples...");
     const entries = await Promise.all(
       sampleLabels.map(async (label) => {
-        for (const extension of SAMPLE_EXTENSIONS) {
-          const encodedLabel = encodeURIComponent(label);
-          const url = `${SAMPLE_FOLDER}/${encodedLabel}.${extension}`;
-          try {
-            const response = await fetch(url);
-            if (!response.ok) {
-              continue;
-            }
-            const arrayBuffer = await response.arrayBuffer();
-            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-            return [label, audioBuffer];
-          } catch (error) {
-            console.warn("Failed to load sample:", url, error);
-            continue;
-          }
+        const extension = "mp3";
+        const encodedLabel = encodeURIComponent(label);
+        const url = `${SAMPLE_FOLDER}/${encodedLabel}.${extension}`;
+        const response = await fetch(url);
+        if (!response.ok) {
+          return null;
         }
-        return null;
+        const arrayBuffer = await response.arrayBuffer();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        return [label, audioBuffer];
       }),
     );
     setSampleBuffers((prev) => {

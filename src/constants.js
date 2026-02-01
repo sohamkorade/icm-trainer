@@ -62,7 +62,6 @@ const YIN_THRESHOLD = 0.15;
 const MIN_FREQUENCY = 60;
 const MAX_FREQUENCY = 1000;
 const SAMPLE_FOLDER = `${import.meta.env.BASE_URL}vocalist`;
-const SAMPLE_EXTENSIONS = ["mp3", "wav"];
 
 export {
   BASE_NOTES,
@@ -76,5 +75,4 @@ export {
   MIN_FREQUENCY,
   MAX_FREQUENCY,
   SAMPLE_FOLDER,
-  SAMPLE_EXTENSIONS,
 };
