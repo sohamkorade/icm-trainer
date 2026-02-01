@@ -51,9 +51,7 @@ function App() {
   const [centsOff, setCentsOff] = useState(0);
   const [confidence, setConfidence] = useState(0);
   const [inTune, setInTune] = useState(false);
-  const [suggestion, setSuggestion] = useState(
-    "Start listening to get feedback.",
-  );
+  const [suggestion, setSuggestion] = useState("Click on Start.");
   const [status, setStatus] = useState("Click Start to initialize audio.");
   const [sampleBuffers, setSampleBuffers] = useState({});
   const [isCallAndResponseActive, setIsCallAndResponseActive] = useState(false);
@@ -595,7 +593,7 @@ function App() {
       }
     }
 
-    setSuggestion("Start listening to get feedback.");
+    setSuggestion("Click on Start.");
   };
 
   useEffect(() => {
