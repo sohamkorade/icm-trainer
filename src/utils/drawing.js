@@ -32,7 +32,7 @@ export function getPitchRange(tonicValue) {
 export function makeYMapper(height, minLog, logRange) {
   return (freq) => {
     const normalized = (Math.log2(freq) - minLog) / logRange;
-    return height - Math.min(Math.max(normalized, 0), 1) * height;
+    return height - normalized * height;
   };
 }
 
@@ -69,39 +69,6 @@ export function drawGridLines(
       ctx.stroke();
     });
   });
-}
-
-export function drawTargetLine(
-  ctx,
-  width,
-  toY,
-  tonicValue,
-  minFreq,
-  maxFreq,
-  modeRef,
-  targetIndexRef,
-) {
-  const currentSequence = MODE_SEQUENCES[modeRef.current];
-  const sequenceNotes = currentSequence.notes || currentSequence;
-  const currentTargetLabel = sequenceNotes[targetIndexRef.current];
-  const targetNote = getNoteByLabel(currentTargetLabel);
-  if (!targetNote) {
-    return;
-  }
-  const targetSemitone = targetNote.semitone;
-  const targetFreq = tonicValue * Math.pow(2, targetSemitone / 12);
-  if (targetFreq < minFreq || targetFreq > maxFreq) {
-    return;
-  }
-  const y = toY(targetFreq);
-  ctx.strokeStyle = "#ffb347";
-  ctx.lineWidth = 2;
-  ctx.setLineDash([6, 4]);
-  ctx.beginPath();
-  ctx.moveTo(0, y);
-  ctx.lineTo(width, y);
-  ctx.stroke();
-  ctx.setLineDash([]);
 }
 
 export function drawPitchHistory(
