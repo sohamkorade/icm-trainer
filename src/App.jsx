@@ -9,6 +9,7 @@ import {
   UTTERANCE_SILENCE_THRESHOLD,
   TARGET_NOTE_GAP_MS,
   BASE_NOTES,
+  NEXT_TARGET_NOTE_WAIT_DURATION_MS,
 } from "./constants";
 import { getNoteByLabel } from "./utils/notes";
 import {
@@ -92,6 +93,7 @@ function App() {
   const wasSilentRef = useRef(true);
   const targetNotePlayTimeRef = useRef(null);
   const targetNoteDurationRef = useRef(1200); // Default 1.2 seconds for oscillator
+  const nextTargetNoteTimeoutRef = useRef(null);
 
   const sequence = useMemo(() => MODE_SEQUENCES[mode], [mode]);
   const sequenceNotes = useMemo(() => sequence.notes || [], [sequence]);
@@ -286,6 +288,19 @@ function App() {
     }
   };
 
+  const scheduleNextTargetNote = (noteToPlay) => {
+    // Clear any existing timeout (debounce behavior)
+    if (nextTargetNoteTimeoutRef.current !== null) {
+      clearTimeout(nextTargetNoteTimeoutRef.current);
+      nextTargetNoteTimeoutRef.current = null;
+    }
+    // Schedule new timeout
+    nextTargetNoteTimeoutRef.current = setTimeout(() => {
+      playTargetNote(noteToPlay);
+      nextTargetNoteTimeoutRef.current = null;
+    }, NEXT_TARGET_NOTE_WAIT_DURATION_MS);
+  };
+
   const resetUtterance = () => {
     if (currentUtteranceRef.current) {
       finalizeUtterance(currentUtteranceRef.current);
@@ -419,7 +434,7 @@ function App() {
           resetAttempts,
           setTargetIndex,
           initializeMetronome,
-          playTargetNote,
+          scheduleNextTargetNote,
           attemptsLeftRef,
           setAttemptsLeft,
           setCurrentUtterance,
@@ -430,6 +445,11 @@ function App() {
 
     // Detect utterance start (transition from silence to pitch)
     if (!currentUtteranceRef.current && hasSignal && wasSilentRef.current) {
+      // Clear any pending next target note timeout (debounce behavior)
+      if (nextTargetNoteTimeoutRef.current !== null) {
+        clearTimeout(nextTargetNoteTimeoutRef.current);
+        nextTargetNoteTimeoutRef.current = null;
+      }
       // Calculate expected start time based on when target note was played + duration + gap
       const expectedStartTime = getExpectedStartTimeForCurrentNote();
       const expectedDuration =

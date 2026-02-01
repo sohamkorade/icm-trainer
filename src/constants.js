@@ -81,6 +81,7 @@ const TIMING_TOLERANCE_MS = Infinity; // Tolerance for timing check in milliseco
 const LENGTH_TOLERANCE_MS = 1000; // Tolerance for length check in milliseconds
 const UTTERANCE_SILENCE_DURATION_MS = 100; // Duration of silence to detect utterance end
 const TARGET_NOTE_GAP_MS = 500; // Gap after target note finishes before expected start
+const NEXT_TARGET_NOTE_WAIT_DURATION_MS = 500; // Wait duration before playing next target note after utterance ends
 
 export {
   BASE_NOTES,
@@ -102,4 +103,5 @@ export {
   LENGTH_TOLERANCE_MS,
   UTTERANCE_SILENCE_DURATION_MS,
   TARGET_NOTE_GAP_MS,
+  NEXT_TARGET_NOTE_WAIT_DURATION_MS,
 };

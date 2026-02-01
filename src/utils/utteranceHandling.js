@@ -24,7 +24,7 @@ export function handleUtteranceEnd(
   resetAttempts,
   setTargetIndex,
   initializeMetronome,
-  playTargetNote,
+  scheduleNextTargetNote,
   attemptsLeftRef,
   setAttemptsLeft,
   setCurrentUtterance,
@@ -46,17 +46,17 @@ export function handleUtteranceEnd(
     resetAttempts();
     setTargetIndex(nextIndex);
     initializeMetronome();
-    playTargetNote(sequenceNotes[nextIndex]);
+    scheduleNextTargetNote(sequenceNotes[nextIndex]);
   } else if (callAndResponseActiveRef.current) {
     const newAttemptsLeft = Math.max(0, attemptsLeftRef.current - 1);
     attemptsLeftRef.current = newAttemptsLeft;
     setAttemptsLeft(newAttemptsLeft);
     if (newAttemptsLeft > 0) {
-      playTargetNote(sequenceNotes[targetIndexRef.current]);
+      scheduleNextTargetNote(sequenceNotes[targetIndexRef.current]);
     } else {
       resetAttempts();
       initializeMetronome();
-      playTargetNote(sequenceNotes[targetIndexRef.current]);
+      scheduleNextTargetNote(sequenceNotes[targetIndexRef.current]);
     }
   }
 
