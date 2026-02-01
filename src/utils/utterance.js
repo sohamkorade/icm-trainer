@@ -172,6 +172,16 @@ function checkExpectedNote(utterance, tonicValue, targetLabel) {
         suggestion = `Go ${direction} by ${notesOff} semitones to reach ${targetLabel}.`;
       }
     }
+  } else {
+    // rate accuracy as one of {perfect, good, ok}
+    const centDifference = Math.abs(match.closest.cents);
+    if (centDifference < 10) {
+      suggestion = `Perfect!`;
+    } else if (centDifference < 20) {
+      suggestion = `Good!`;
+    } else {
+      suggestion = `Ok!`;
+    }
   }
 
   return { isExpectedNote, suggestion };

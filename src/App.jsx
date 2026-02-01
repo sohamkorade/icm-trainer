@@ -386,7 +386,7 @@ function App() {
     const gain = audioCtx.createGain();
     osc.type = "sine";
     osc.frequency.value = tonic;
-    gain.gain.value = 0.08;
+    gain.gain.value = 0.2;
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.start();
