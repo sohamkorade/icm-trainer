@@ -9,7 +9,6 @@ function ControlsPanel({
   tempo,
   onStart,
   onStop,
-  onPlayTargetNote,
   onToggleDrone,
   onTonicChange,
   onTempoChange,
@@ -22,13 +21,6 @@ function ControlsPanel({
         </button>
         <button className="ghost" onClick={onStop} disabled={!audioReady}>
           Stop
-        </button>
-        <button
-          className="ghost"
-          onClick={onPlayTargetNote}
-          disabled={!audioReady}
-        >
-          Play Target Note
         </button>
         <button
           className="ghost"
@@ -78,7 +70,6 @@ ControlsPanel.propTypes = {
   tempo: PropTypes.number.isRequired,
   onStart: PropTypes.func.isRequired,
   onStop: PropTypes.func.isRequired,
-  onPlayTargetNote: PropTypes.func.isRequired,
   onToggleDrone: PropTypes.func.isRequired,
   onTonicChange: PropTypes.func.isRequired,
   onTempoChange: PropTypes.func.isRequired,

@@ -200,6 +200,7 @@ function App() {
       await loadVocalSamples(audioCtx);
       setIsListening(true);
       setStatus("Audio ready. Play the target note and sing.");
+      startCallAndResponse();
     } catch (error) {
       console.error("Microphone access error:", error);
       setStatus("Microphone access denied.");
@@ -322,7 +323,7 @@ function App() {
   };
 
   const startCallAndResponse = () => {
-    if (!audioReady) {
+    if (!audioReady && !audioCtxRef.current) {
       return;
     }
     callAndResponseActiveRef.current = true;
@@ -682,7 +683,6 @@ function App() {
         tempo={tempo}
         onStart={handleStart}
         onStop={handleStop}
-        onPlayTargetNote={startCallAndResponse}
         onToggleDrone={toggleDrone}
         onTonicChange={(event) => setTonic(Number(event.target.value))}
         onTempoChange={(event) => setTempo(Number(event.target.value))}
