@@ -211,7 +211,7 @@ function App() {
       await loadVocalSamples(audioCtx);
       setIsListening(true);
       setStatus("Audio ready. Play the target note and sing.");
-      startCallAndResponse();
+      // startCallAndResponse();
     } catch (error) {
       console.error("Microphone access error:", error);
       setStatus("Microphone access denied.");
@@ -703,22 +703,13 @@ function App() {
         trainerHistory,
         trainerTimestamps,
         "#ff6b35",
-        timestamps.length > 0 ? timestamps : trainerTimestamps,
         true, // breakOnGaps = true for trainer pitch
         500, // gapThresholdMs = 500ms
       );
     }
 
     // Draw user pitch in blue
-    drawPitchHistory(
-      ctx,
-      width,
-      toY,
-      history,
-      timestamps,
-      "#5b6cff",
-      timestamps,
-    );
+    drawPitchHistory(ctx, width, toY, history, timestamps, "#5b6cff");
 
     // Draw suggestions on the graph
     drawSuggestions(
@@ -760,6 +751,7 @@ function App() {
         onAttemptsBeforeRepeatChange={(event) =>
           setAttemptsBeforeRepeat(Number(event.target.value))
         }
+        onListen={startCallAndResponse}
       />
 
       <PitchPanel

@@ -14,6 +14,7 @@ function ControlsPanel({
   onTonicChange,
   onTempoChange,
   onAttemptsBeforeRepeatChange,
+  onListen,
 }) {
   return (
     <section className="panel">
@@ -63,6 +64,9 @@ function ControlsPanel({
             disabled={!audioReady}
           />
         </label>
+        <button onClick={onListen} disabled={!audioReady}>
+          Listen
+        </button>
       </div>
     </section>
   );
@@ -84,6 +88,7 @@ ControlsPanel.propTypes = {
   attemptsBeforeRepeat: PropTypes.number.isRequired,
   onStart: PropTypes.func.isRequired,
   onStop: PropTypes.func.isRequired,
+  onListen: PropTypes.func.isRequired,
   onToggleDrone: PropTypes.func.isRequired,
   onTonicChange: PropTypes.func.isRequired,
   onTempoChange: PropTypes.func.isRequired,

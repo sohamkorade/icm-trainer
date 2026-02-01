@@ -67,7 +67,7 @@ const TONIC_OPTIONS = Array.from({ length: (6 - 3 + 1) * 12 }, (_, index) => {
 const MAX_HISTORY = 2000;
 const IN_TUNE_CENTS = 50;
 const STABLE_MS = 500;
-const ATTEMPT_COUNT = 2;
+const ATTEMPT_COUNT = 1;
 const YIN_THRESHOLD = 0.15;
 const MIN_FREQUENCY = 60;
 const MAX_FREQUENCY = 1000;
