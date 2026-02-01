@@ -2,7 +2,12 @@
  * Drawing utilities for the pitch graph canvas
  */
 
-import { BASE_NOTES, MODE_SEQUENCES, MAX_HISTORY } from "../constants";
+import {
+  BASE_NOTES,
+  MODE_SEQUENCES,
+  MAX_HISTORY,
+  GRAPH_TIME_RANGE_MS,
+} from "../constants";
 import { getNoteByLabel } from "./notes";
 
 export function getCanvasMetrics(canvas) {
@@ -118,12 +123,10 @@ export function drawPitchHistory(
   let hasStarted = false;
   let lastTimestamp = null;
   const now = Date.now();
-  // Use reference timestamps (main timeline) for positioning
-  const oldestTimestamp =
-    referenceTimestamps && referenceTimestamps.length > 0
-      ? referenceTimestamps[0]
-      : timestamps[0];
-  const timeRange = Math.max(now - oldestTimestamp, 1000);
+  // Use fixed time range to control scroll speed (larger = slower scroll)
+  // Show a sliding window of the last N seconds
+  const timeRange = GRAPH_TIME_RANGE_MS;
+  const windowStartTime = now - timeRange;
 
   history.forEach((freq, index) => {
     if (freq === null || freq <= 0) {
@@ -141,7 +144,8 @@ export function drawPitchHistory(
       }
     }
 
-    const relativeTime = timestamp - oldestTimestamp;
+    // Calculate relative time from the sliding window start
+    const relativeTime = timestamp - windowStartTime;
     // Only draw if within visible range
     if (relativeTime < 0 || relativeTime > timeRange * 1.1) {
       return;
@@ -164,11 +168,11 @@ function drawExpectedStartLine(
   width,
   height,
   utterance,
-  oldestTimestamp,
+  windowStartTime,
   timeRange,
 ) {
   const expectedStartRelativeTime =
-    utterance.expectedStartTime - oldestTimestamp;
+    utterance.expectedStartTime - windowStartTime;
   if (
     expectedStartRelativeTime >= -timeRange * 0.1 &&
     expectedStartRelativeTime <= timeRange * 1.1
@@ -202,14 +206,14 @@ function drawExpectedDurationBar(
   width,
   targetY,
   utterance,
-  oldestTimestamp,
+  windowStartTime,
   timeRange,
 ) {
   const expectedStartX = Math.max(
     0,
     Math.min(
       width,
-      ((utterance.expectedStartTime - oldestTimestamp) / timeRange) * width,
+      ((utterance.expectedStartTime - windowStartTime) / timeRange) * width,
     ),
   );
   const expectedDurationWidth =
@@ -315,11 +319,12 @@ function drawActualUtteranceBar(
   maxFreq,
 ) {
   const now = Date.now();
-  const oldestTimestamp = timestamps[0];
-  const timeRange = Math.max(now - oldestTimestamp, 1000);
+  // Use fixed time range to control scroll speed (larger = slower scroll)
+  const timeRange = GRAPH_TIME_RANGE_MS;
+  const windowStartTime = now - timeRange;
   const currentTime = utterance.endTime || now;
-  const actualStartRelativeTime = utterance.startTime - oldestTimestamp;
-  const actualEndRelativeTime = currentTime - oldestTimestamp;
+  const actualStartRelativeTime = utterance.startTime - windowStartTime;
+  const actualEndRelativeTime = currentTime - windowStartTime;
 
   // Only draw if actual utterance is at least partially visible
   if (actualEndRelativeTime > 0 && actualStartRelativeTime < timeRange * 1.1) {
@@ -384,13 +389,14 @@ export function drawExpectedTiming(
   }
 
   const now = Date.now();
-  const oldestTimestamp = timestamps[0];
-  const timeRange = Math.max(now - oldestTimestamp, 1000);
+  // Use fixed time range to control scroll speed (larger = slower scroll)
+  const timeRange = GRAPH_TIME_RANGE_MS;
+  const windowStartTime = now - timeRange;
 
   // Check if utterance has scrolled off the left side - if so, don't draw it
   const expectedEndTime =
     utterance.expectedStartTime + utterance.expectedDuration;
-  if (expectedEndTime < oldestTimestamp) {
+  if (expectedEndTime < windowStartTime) {
     return; // Utterance has scrolled off, don't draw
   }
 
@@ -405,13 +411,13 @@ export function drawExpectedTiming(
   }
   const targetY = toY(targetFreq);
 
-  // drawExpectedStartLine(ctx, width, height, utterance, oldestTimestamp, timeRange);
+  // drawExpectedStartLine(ctx, width, height, utterance, windowStartTime, timeRange);
   drawExpectedDurationBar(
     ctx,
     width,
     targetY,
     utterance,
-    oldestTimestamp,
+    windowStartTime,
     timeRange,
   );
   drawActualUtteranceBar(
@@ -424,4 +430,91 @@ export function drawExpectedTiming(
     minFreq,
     maxFreq,
   );
+}
+
+export function drawSuggestions(
+  ctx,
+  width,
+  height,
+  toY,
+  suggestions,
+  timestamps,
+  tonicValue,
+  minFreq,
+  maxFreq,
+) {
+  if (!suggestions || suggestions.length === 0 || timestamps.length === 0) {
+    return;
+  }
+
+  const now = Date.now();
+  // Use fixed time range to control scroll speed (larger = slower scroll)
+  const timeRange = GRAPH_TIME_RANGE_MS;
+  const windowStartTime = now - timeRange;
+
+  suggestions.forEach((suggestion) => {
+    // Calculate x position based on timestamp (moves left as time passes)
+    const relativeTime = suggestion.timestamp - windowStartTime;
+
+    // Only draw if within visible range
+    if (relativeTime < 0 || relativeTime > timeRange * 1.1) {
+      return;
+    }
+
+    let x = (relativeTime / timeRange) * width;
+
+    // Calculate y position based on pitch (or use middle if no pitch)
+    let y;
+    if (
+      suggestion.pitch &&
+      suggestion.pitch >= minFreq &&
+      suggestion.pitch <= maxFreq
+    ) {
+      y = toY(suggestion.pitch);
+    } else {
+      // Default to middle of graph if no valid pitch
+      y = height / 2;
+    }
+
+    // Draw suggestion text with background for readability
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+
+    // Measure text width for background
+    const textMetrics = ctx.measureText(suggestion.message);
+    const textWidth = textMetrics.width;
+    const textHeight = 16;
+    const padding = 6;
+
+    // Adjust x position to prevent overflow off right edge
+    if (x + textWidth + padding > width) {
+      x = width - textWidth - padding;
+    }
+    // Ensure x is not negative (for left edge)
+    x = Math.max(padding, x);
+
+    // Draw background rectangle
+    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.fillRect(
+      x - padding,
+      y - textHeight / 2 - padding / 2,
+      textWidth + padding * 2,
+      textHeight + padding,
+    );
+
+    // Draw border
+    ctx.strokeStyle = "#ff6b35";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(
+      x - padding,
+      y - textHeight / 2 - padding / 2,
+      textWidth + padding * 2,
+      textHeight + padding,
+    );
+
+    // Draw text
+    ctx.fillStyle = "#333";
+    ctx.fillText(suggestion.message, x, y);
+  });
 }

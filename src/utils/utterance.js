@@ -97,9 +97,7 @@ function checkStability(
   );
 
   const isStable = variation <= thresholdSemitones;
-  const suggestion = isStable
-    ? null
-    : `Keep the note stable - pitch is varying by ${variation.toFixed(2)} semitones (threshold: ${thresholdSemitones})`;
+  const suggestion = isStable ? null : `Keep the note stable`;
 
   return { isStable, suggestion };
 }

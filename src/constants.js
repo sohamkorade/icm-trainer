@@ -82,6 +82,7 @@ const LENGTH_TOLERANCE_MS = 1000; // Tolerance for length check in milliseconds
 const UTTERANCE_SILENCE_DURATION_MS = 100; // Duration of silence to detect utterance end
 const TARGET_NOTE_GAP_MS = 500; // Gap after target note finishes before expected start
 const NEXT_TARGET_NOTE_WAIT_DURATION_MS = 500; // Wait duration before playing next target note after utterance ends
+const GRAPH_TIME_RANGE_MS = 10000; // Time range displayed in graph (10 seconds) - larger = slower scroll
 
 export {
   BASE_NOTES,
@@ -104,4 +105,5 @@ export {
   UTTERANCE_SILENCE_DURATION_MS,
   TARGET_NOTE_GAP_MS,
   NEXT_TARGET_NOTE_WAIT_DURATION_MS,
+  GRAPH_TIME_RANGE_MS,
 };

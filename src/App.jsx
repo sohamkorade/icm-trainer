@@ -10,6 +10,7 @@ import {
   TARGET_NOTE_GAP_MS,
   BASE_NOTES,
   NEXT_TARGET_NOTE_WAIT_DURATION_MS,
+  GRAPH_TIME_RANGE_MS,
 } from "./constants";
 import { getNoteByLabel } from "./utils/notes";
 import {
@@ -34,6 +35,7 @@ import {
   drawTargetLine,
   drawPitchHistory,
   drawExpectedTiming,
+  drawSuggestions,
 } from "./utils/drawing";
 import ControlsPanel from "./components/ControlsPanel";
 import PitchPanel from "./components/PitchPanel";
@@ -94,6 +96,7 @@ function App() {
   const targetNotePlayTimeRef = useRef(null);
   const targetNoteDurationRef = useRef(1200); // Default 1.2 seconds for oscillator
   const nextTargetNoteTimeoutRef = useRef(null);
+  const suggestionsRef = useRef([]); // Array of {message, timestamp, pitch}
 
   const sequence = useMemo(() => MODE_SEQUENCES[mode], [mode]);
   const sequenceNotes = useMemo(() => sequence.notes || [], [sequence]);
@@ -311,6 +314,7 @@ function App() {
     wasSilentRef.current = true;
     targetNotePlayTimeRef.current = null;
     // Don't clear trainer pitch history - keep previous occurrences visible
+    // Don't clear suggestions - let them scroll off naturally
   };
 
   const resetAttempts = () => {
@@ -425,6 +429,27 @@ function App() {
         finalizeUtterance(currentUtteranceRef.current);
         utterancesRef.current.push(currentUtteranceRef.current);
 
+        // Add suggestions to graph after utterance ends
+        const finalizedUtterance = currentUtteranceRef.current;
+        if (
+          finalizedUtterance.suggestions &&
+          finalizedUtterance.suggestions.length > 0
+        ) {
+          // Use the average pitch from the utterance for y-position, or current pitch as fallback
+          const validSamples = finalizedUtterance.pitchSamples.filter(
+            (s) => s.pitch > 0 && s.confidence >= 0.3,
+          );
+          const avgPitch =
+            validSamples.length > 0
+              ? validSamples.reduce((sum, s) => sum + s.pitch, 0) /
+                validSamples.length
+              : pitch || 0;
+
+          finalizedUtterance.suggestions.forEach((suggestionMsg) => {
+            addSuggestionToGraph(suggestionMsg, now, avgPitch);
+          });
+        }
+
         handleUtteranceEnd(
           currentUtteranceRef,
           utterancesRef,
@@ -494,7 +519,25 @@ function App() {
     return currentUtteranceRef.current;
   };
 
+  const addSuggestionToGraph = (message, timestamp, pitch) => {
+    // Create a suggestion object with message, timestamp, and initial position
+    // x and y will be calculated during drawing based on timestamp
+    const suggestion = {
+      message,
+      timestamp: timestamp || Date.now(),
+      pitch, // Store pitch for y-position calculation
+    };
+    suggestionsRef.current.push(suggestion);
+
+    // Keep only recent suggestions (last 50)
+    if (suggestionsRef.current.length > 50) {
+      suggestionsRef.current.shift();
+    }
+  };
+
   const updateSuggestion = (utterance, rms, pitch, pitchConfidence) => {
+    // Keep the old suggestion state for fallback display
+    // Note: Suggestions are only added to graph after utterance ends
     if (rms < UTTERANCE_SILENCE_THRESHOLD) {
       setSuggestion("Sing louder for a clear pitch.");
       return;
@@ -506,7 +549,8 @@ function App() {
 
     // Use utterance-based suggestions if available
     if (utterance && utterance.suggestions.length > 0) {
-      setSuggestion(utterance.suggestions.join(" "));
+      const suggestionText = utterance.suggestions.join(" ");
+      setSuggestion(suggestionText);
       return;
     }
 
@@ -614,13 +658,19 @@ function App() {
     // Draw expected timing indicators for all utterances that are still visible
     // (including completed ones that haven't scrolled off the left side)
     if (timestamps.length > 0) {
-      const oldestTimestamp = timestamps[0];
+      const now = Date.now();
+      const windowStartTime = now - GRAPH_TIME_RANGE_MS;
 
       // Clean up utterances that have scrolled off the left side
       utterancesRef.current = utterancesRef.current.filter((utterance) => {
         const expectedEndTime =
           utterance.expectedStartTime + utterance.expectedDuration;
-        return expectedEndTime >= oldestTimestamp; // Keep if still visible
+        return expectedEndTime >= windowStartTime; // Keep if still visible
+      });
+
+      // Clean up suggestions that have scrolled off the left side
+      suggestionsRef.current = suggestionsRef.current.filter((suggestion) => {
+        return suggestion.timestamp >= windowStartTime; // Keep if still visible
       });
 
       // Draw all completed utterances
@@ -681,6 +731,19 @@ function App() {
       timestamps,
       "#5b6cff",
       timestamps,
+    );
+
+    // Draw suggestions on the graph
+    drawSuggestions(
+      ctx,
+      width,
+      height,
+      toY,
+      suggestionsRef.current,
+      timestamps,
+      tonicValue,
+      minFreq,
+      maxFreq,
     );
   };
 
