@@ -6,6 +6,7 @@ import {
   MODE_SEQUENCES,
   BASE_NOTES,
   STABLE_MS,
+  ATTEMPT_COUNT,
   SAMPLE_FOLDER,
   TONIC_OPTIONS,
 } from "./constants";
@@ -31,6 +32,8 @@ function App() {
   );
   const [status, setStatus] = useState("Click Start to initialize audio.");
   const [sampleBuffers, setSampleBuffers] = useState({});
+  const [isCallAndResponseActive, setIsCallAndResponseActive] = useState(false);
+  const [attemptsLeft, setAttemptsLeft] = useState(ATTEMPT_COUNT);
 
   const audioCtxRef = useRef(null);
   const analyserRef = useRef(null);
@@ -39,7 +42,12 @@ function App() {
   const droneOscRef = useRef(null);
   const droneGainRef = useRef(null);
   const rafRef = useRef(null);
-  const stableSinceRef = useRef(null);
+  const callAndResponseActiveRef = useRef(false);
+  const attemptsLeftRef = useRef(ATTEMPT_COUNT);
+  const stableDetectedSinceRef = useRef(null);
+  const stableDetectedLabelRef = useRef(null);
+  const stableAttemptCountedRef = useRef(false);
+  const notePlayCountsRef = useRef({});
   const pitchHistoryRef = useRef([]);
   const canvasRef = useRef(null);
   const lastUiUpdateRef = useRef(0);
@@ -78,6 +86,10 @@ function App() {
   useEffect(() => {
     tonicRef.current = tonic;
   }, [tonic]);
+
+  useEffect(() => {
+    callAndResponseActiveRef.current = isCallAndResponseActive;
+  }, [isCallAndResponseActive]);
 
   const ensureAudioContext = async () => {
     if (audioCtxRef.current) {
@@ -155,6 +167,8 @@ function App() {
   const handleStop = () => {
     setIsListening(false);
     setIsDroneOn(false);
+    setIsCallAndResponseActive(false);
+    callAndResponseActiveRef.current = false;
     if (droneOscRef.current) {
       droneOscRef.current.stop();
       droneOscRef.current.disconnect();
@@ -210,18 +224,44 @@ function App() {
     source.start();
   };
 
-  const playTargetNote = () => {
-    const note = getNoteByLabel(targetLabel);
+  const playTargetNote = (label = targetLabel) => {
+    const note = getNoteByLabel(label);
     if (!note) {
       return;
     }
     const targetFreq = tonic * Math.pow(2, note.semitone / 12);
-    const buffer = sampleBuffers[targetLabel];
+    const buffer = sampleBuffers[label];
+    notePlayCountsRef.current = {
+      ...notePlayCountsRef.current,
+      [label]: (notePlayCountsRef.current[label] || 0) + 1,
+    };
     if (buffer) {
       playSample(buffer);
       return;
     }
     playOscillator(targetFreq, 1.2);
+  };
+
+  const resetStableDetection = () => {
+    stableDetectedSinceRef.current = null;
+    stableDetectedLabelRef.current = null;
+    stableAttemptCountedRef.current = false;
+  };
+
+  const resetAttempts = () => {
+    attemptsLeftRef.current = ATTEMPT_COUNT;
+    setAttemptsLeft(ATTEMPT_COUNT);
+  };
+
+  const startCallAndResponse = () => {
+    if (!audioReady) {
+      return;
+    }
+    callAndResponseActiveRef.current = true;
+    setIsCallAndResponseActive(true);
+    resetAttempts();
+    resetStableDetection();
+    playTargetNote();
   };
 
   const toggleDrone = () => {
@@ -281,7 +321,7 @@ function App() {
       targetLabel: currentTarget,
     });
     if (!match) {
-      stableSinceRef.current = null;
+      resetStableDetection();
       setDetectedNote("");
       setCentsOff(0);
       setInTune(false);
@@ -291,19 +331,44 @@ function App() {
     setDetectedNote(match.closest.displayLabel || match.closest.note.label);
     setCentsOff(match.closest.cents);
     setInTune(match.isGood);
-    if (!match.isGood) {
-      stableSinceRef.current = null;
+    const now = Date.now();
+    const closestLabel = match.closest.note.label;
+    if (closestLabel !== stableDetectedLabelRef.current) {
+      stableDetectedLabelRef.current = closestLabel;
+      stableDetectedSinceRef.current = now;
+      stableAttemptCountedRef.current = false;
       return match;
     }
-
-    const now = Date.now();
-    if (!stableSinceRef.current) {
-      stableSinceRef.current = now;
-      return;
-    }
-    if (now - stableSinceRef.current >= STABLE_MS) {
-      stableSinceRef.current = null;
-      setTargetIndex((prev) => (prev + 1) % currentSequence.length);
+    if (
+      stableDetectedSinceRef.current &&
+      now - stableDetectedSinceRef.current >= STABLE_MS &&
+      !stableAttemptCountedRef.current
+    ) {
+      stableAttemptCountedRef.current = true;
+      if (match.isGood) {
+        const nextIndex = (targetIndexRef.current + 1) % currentSequence.length;
+        resetStableDetection();
+        resetAttempts();
+        setTargetIndex(nextIndex);
+        if (callAndResponseActiveRef.current) {
+          playTargetNote(currentSequence[nextIndex]);
+        }
+        return match;
+      }
+      if (!callAndResponseActiveRef.current) {
+        return match;
+      }
+      const newAttemptsLeft = Math.max(0, attemptsLeftRef.current - 1);
+      attemptsLeftRef.current = newAttemptsLeft;
+      setAttemptsLeft(newAttemptsLeft);
+      if (newAttemptsLeft > 0) {
+        resetStableDetection();
+        playTargetNote(currentSequence[targetIndexRef.current]);
+        return match;
+      }
+      resetStableDetection();
+      resetAttempts();
+      playTargetNote(currentSequence[targetIndexRef.current]);
     }
     return match;
   };
@@ -530,6 +595,7 @@ function App() {
 
   useEffect(() => {
     setTargetIndex(0);
+    resetAttempts();
   }, [mode]);
 
   return (
@@ -545,7 +611,7 @@ function App() {
         tonicOptions={TONIC_OPTIONS}
         onStart={handleStart}
         onStop={handleStop}
-        onPlayTargetNote={playTargetNote}
+        onPlayTargetNote={startCallAndResponse}
         onToggleDrone={toggleDrone}
         onTonicChange={(event) => setTonic(Number(event.target.value))}
       />
@@ -557,6 +623,7 @@ function App() {
         confidence={confidence}
         inTune={inTune}
         suggestion={suggestion}
+        attemptsLeft={attemptsLeft}
         canvasRef={canvasRef}
         status={status}
         targetLabel={targetLabel}

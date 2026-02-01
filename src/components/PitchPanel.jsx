@@ -8,6 +8,7 @@ function PitchPanel({
   confidence,
   inTune,
   suggestion,
+  attemptsLeft,
   canvasRef,
   status,
   targetLabel,
@@ -23,6 +24,7 @@ function PitchPanel({
         <div className="target">
           Target: <span className="badge">{targetLabel}</span>
         </div>
+        <div className="attempts">Attempts left: {attemptsLeft}</div>
         <label className="sequence-select">
           <span>Sequence</span>
           <select value={mode} onChange={onModeChange}>
@@ -48,9 +50,9 @@ function PitchPanel({
       </div>
 
       <div className="pitch-info">
-        <div>Pitch: {detectedPitch ? detectedPitch.toFixed(1) : "--"} Hz</div>
+        {/* <div>Pitch: {detectedPitch ? detectedPitch.toFixed(1) : "--"} Hz</div> */}
         <div>Detected: {detectedNote || "--"}</div>
-        <div>Cents: {detectedPitch ? centsOff.toFixed(1) : "--"}</div>
+        {/* <div>Cents: {detectedPitch ? centsOff.toFixed(1) : "--"}</div> */}
         <div>Confidence: {confidence.toFixed(2)}</div>
       </div>
       <div className={`tune-indicator ${inTune ? "good" : ""}`}>
@@ -72,6 +74,7 @@ PitchPanel.propTypes = {
   confidence: PropTypes.number.isRequired,
   inTune: PropTypes.bool.isRequired,
   suggestion: PropTypes.string.isRequired,
+  attemptsLeft: PropTypes.number.isRequired,
   canvasRef: PropTypes.shape({ current: PropTypes.any }),
   status: PropTypes.string.isRequired,
   targetLabel: PropTypes.string.isRequired,
